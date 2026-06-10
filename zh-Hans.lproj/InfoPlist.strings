@@ -1,0 +1,5 @@
+CFBundleDisplayName = "调律";
+CFBundleName = "调律";
+NSAppleEventsUsageDescription = "调律需要访问 Apple Music 以读取当前曲目并控制播放。";
+NSAppleMusicUsageDescription = "调律需要访问 Apple Music 的播放信息。";
+NSMediaLibraryUsageDescription = "调律需要访问您的媒体库以读取正在播放的元数据。";

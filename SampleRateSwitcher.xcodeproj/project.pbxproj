@@ -1,0 +1,277 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* SampleRateSwitcherApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* SampleRateSwitcherApp.swift */; };
+		A10000000000000000000002 /* SampleRateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* SampleRateModel.swift */; };
+		A10000000000000000000003 /* MusicController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* MusicController.swift */; };
+		A10000000000000000000004 /* AudioDeviceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* AudioDeviceController.swift */; };
+		A10000000000000000000005 /* MediaRemoteController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* MediaRemoteController.swift */; };
+		A10000000000000000000006 /* MediaAuthorizationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MediaAuthorizationController.swift */; };
+		A10000000000000000000007 /* LogStreamController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* LogStreamController.swift */; };
+		A10000000000000000000008 /* GlassPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* GlassPanelView.swift */; };
+		A10000000000000000000009 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* AppIcon.icon */; };
+		A10000000000000000000010 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000001 /* InfoPlist.strings */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* SampleRateSwitcherApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleRateSwitcherApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* SampleRateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleRateModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* MusicController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicController.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* AudioDeviceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceController.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000006 /* SampleRateSwitcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SampleRateSwitcher.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000007 /* SampleRateSwitcher.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = SampleRateSwitcher.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000008 /* MediaRemoteController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaRemoteController.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* MediaAuthorizationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAuthorizationController.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* LogStreamController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStreamController.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* GlassPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPanelView.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		A20000000000000000000013 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		A20000000000000000000014 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		A20000000000000000000015 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = "ja.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A40000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A40000000000000000000002 /*  */,
+				A40000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A40000000000000000000002 /*  */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* SampleRateSwitcherApp.swift */,
+				A20000000000000000000002 /* SampleRateModel.swift */,
+				A20000000000000000000003 /* MusicController.swift */,
+				A20000000000000000000004 /* AudioDeviceController.swift */,
+				A20000000000000000000008 /* MediaRemoteController.swift */,
+				A20000000000000000000009 /* MediaAuthorizationController.swift */,
+				A20000000000000000000010 /* LogStreamController.swift */,
+				A20000000000000000000011 /* GlassPanelView.swift */,
+				A20000000000000000000012 /* AppIcon.icon */,
+				A90000000000000000000001 /* InfoPlist.strings */,
+				A20000000000000000000005 /* Info.plist */,
+				A20000000000000000000007 /* SampleRateSwitcher.entitlements */,
+			);
+			name = "";
+			sourceTree = "<group>";
+		};
+		A40000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000006 /* SampleRateSwitcher.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* SampleRateSwitcher */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000002 /* Build configuration list for PBXNativeTarget "SampleRateSwitcher" */;
+			buildPhases = (
+				A30000000000000000000002 /* Sources */,
+				A30000000000000000000001 /* Frameworks */,
+				A30000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SampleRateSwitcher;
+			productName = SampleRateSwitcher;
+			productReference = A20000000000000000000006 /* SampleRateSwitcher.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A60000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "SampleRateSwitcher" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"zh-Hans",
+				"zh-Hant",
+				ja,
+			);
+			mainGroup = A40000000000000000000001;
+			productRefGroup = A40000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* SampleRateSwitcher */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A30000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000009 /* AppIcon.icon in Resources */,
+				A10000000000000000000010 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A30000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* SampleRateSwitcherApp.swift in Sources */,
+				A10000000000000000000002 /* SampleRateModel.swift in Sources */,
+				A10000000000000000000003 /* MusicController.swift in Sources */,
+				A10000000000000000000004 /* AudioDeviceController.swift in Sources */,
+				A10000000000000000000005 /* MediaRemoteController.swift in Sources */,
+				A10000000000000000000006 /* MediaAuthorizationController.swift in Sources */,
+				A10000000000000000000007 /* LogStreamController.swift in Sources */,
+				A10000000000000000000008 /* GlassPanelView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		A90000000000000000000001 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A20000000000000000000013 /* zh-Hans */,
+				A20000000000000000000014 /* zh-Hant */,
+				A20000000000000000000015 /* ja */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		A80000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = SampleRateSwitcher.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 68V557Q6A4;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.garykong.choritsu;
+				PRODUCT_NAME = Choritsu;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A80000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_ENTITLEMENTS = SampleRateSwitcher.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 68V557Q6A4;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.garykong.choritsu;
+				PRODUCT_NAME = Choritsu;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A80000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A80000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A70000000000000000000001 /* Build configuration list for PBXProject "SampleRateSwitcher" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000003 /* Debug */,
+				A80000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A70000000000000000000002 /* Build configuration list for PBXNativeTarget "SampleRateSwitcher" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000001 /* Debug */,
+				A80000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A60000000000000000000001 /* Project object */;
+}
