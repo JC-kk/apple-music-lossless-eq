@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choritsu 調律 — Lossless sample-rate switcher + parametric EQ for Apple Music</title>
+<meta name="description" content="Choritsu keeps Apple Music bit-perfect by matching your output device to the track's sample rate, then adds an optional parametric EQ for headphones (AutoEQ). No driver, no admin — a LosslessSwitcher alternative for macOS 26.">
+<meta name="theme-color" content="#211E1B">
+<link rel="icon" href="icon_1024.png">
+<meta property="og:title" content="Choritsu 調律">
+<meta property="og:description" content="A lossless sample-rate switcher + parametric EQ for Apple Music on macOS.">
+<meta property="og:image" content="https://jc-kk.github.io/apple-music-lossless-eq/icon_1024.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jc-kk.github.io/apple-music-lossless-eq/">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{
+  --paper:#F2EBDD; --paper2:#EAE0CD; --card:#F6F1E5;
+  --sumi:#211E1B; --sumi2:#15120F;
+  --ink:#2c2722; --ink2:#6f665a; --ink3:#a59b8b;
+  --cream:#F2EBDD;
+  --rikyu:#737842; --rikyu-deep:#5b6033; --rikyu-bright:#8c9152;
+  --ai:#4F6373; --matcha:#708263;
+  --line:rgba(33,30,27,.14); --line-soft:rgba(33,30,27,.08);
+  --cream-line:rgba(242,235,221,.18);
+  --maxw:1060px;
+  --serif:"Hiragino Mincho ProN","Yu Mincho","Songti SC","Noto Serif JP",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+.eyebrow{font-family:var(--serif);font-size:.72rem;letter-spacing:.34em;text-transform:uppercase;color:var(--ink2)}
+
+/* ---- hero ---- */
+.hero{background:linear-gradient(#211E1B,#15120F);color:var(--cream);padding:0 0 76px;position:relative}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:22px 24px;max-width:var(--maxw);margin:0 auto}
+.brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);letter-spacing:.06em}
+.brand .ji{font-size:1.15rem}
+.brand .ro{font-size:.74rem;letter-spacing:.32em;text-transform:uppercase;color:rgba(242,235,221,.6)}
+.brand img{width:30px;height:30px;border-radius:8px}
+.navlinks{display:flex;gap:26px;align-items:center;font-size:.86rem;color:rgba(242,235,221,.72)}
+.navlinks a:hover{color:var(--cream)}
+.navlinks .ghost{display:inline-flex;align-items:center;gap:7px}
+@media(max-width:620px){.navlinks .hide{display:none}}
+
+.herobody{max-width:760px;margin:30px auto 0;padding:0 24px;text-align:center}
+.mark{width:300px;max-width:74%;margin:0 auto 30px}
+.h1{font-family:var(--serif);font-weight:600;font-size:clamp(2.6rem,7vw,4rem);line-height:1.02;letter-spacing:.02em}
+.h1 .ji{display:block;font-size:.42em;letter-spacing:.5em;color:var(--rikyu-bright);margin-top:.7em;padding-left:.5em}
+.lede{font-size:clamp(1.05rem,2.4vw,1.3rem);color:rgba(242,235,221,.9);margin:26px auto 0;max-width:30ch;font-weight:500}
+.sub{font-size:1rem;color:rgba(242,235,221,.62);margin:16px auto 0;max-width:46ch}
+
+.cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:36px}
+.btn{display:inline-flex;align-items:center;gap:9px;font-size:.96rem;font-weight:600;padding:13px 24px;border-radius:13px;transition:transform .12s ease,background .2s ease,border-color .2s ease;border:1px solid transparent}
+.btn:active{transform:scale(.975)}
+.btn-primary{background:var(--rikyu);color:#fbf8ef;box-shadow:0 8px 26px rgba(115,120,66,.34)}
+.btn-primary:hover{background:var(--rikyu-bright)}
+.btn-ghost{border-color:var(--cream-line);color:var(--cream)}
+.btn-ghost:hover{border-color:rgba(242,235,221,.45);background:rgba(242,235,221,.06)}
+.meta{margin-top:20px;font-size:.8rem;color:rgba(242,235,221,.5);letter-spacing:.02em}
+.meta b{color:rgba(242,235,221,.78);font-weight:600}
+
+/* ---- sections ---- */
+section.band{padding:84px 0}
+.sectionhead{text-align:center;margin-bottom:44px}
+.sectionhead h2{font-family:var(--serif);font-weight:600;font-size:clamp(1.7rem,4vw,2.2rem);margin-top:10px;letter-spacing:.01em}
+.sectionhead p{color:var(--ink2);margin-top:12px;max-width:52ch;margin-inline:auto}
+
+/* ---- screenshots ---- */
+.shot-main{border-radius:20px;border:1px solid var(--line);background:var(--card);overflow:hidden;box-shadow:0 24px 60px rgba(33,30,27,.16)}
+.shot-main img{width:100%}
+.cap{text-align:center;color:var(--ink3);font-size:.82rem;margin-top:16px}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+.trio figure{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 12px 30px rgba(33,30,27,.1)}
+.trio img{border-radius:8px}
+.trio figcaption{text-align:center;color:var(--ink2);font-size:.78rem;margin-top:12px}
+@media(max-width:680px){.trio{grid-template-columns:1fr;max-width:340px;margin-inline:auto}}
+
+/* ---- features ---- */
+.feat-band{background:var(--paper2);border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 22px}
+.card .ji{font-family:var(--serif);font-size:1.35rem;color:var(--rikyu-deep)}
+.card h3{font-size:1.05rem;margin:12px 0 8px;font-weight:600}
+.card p{color:var(--ink2);font-size:.92rem;line-height:1.6}
+
+/* ---- how ---- */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:s}
+@media(max-width:740px){.steps{grid-template-columns:1fr;max-width:460px;margin-inline:auto}}
+.step{position:relative;padding-left:8px}
+.step .n{font-family:var(--serif);font-size:.78rem;letter-spacing:.2em;color:var(--rikyu-deep)}
+.step h4{font-size:1rem;margin:8px 0 6px;font-weight:600}
+.step p{color:var(--ink2);font-size:.9rem}
+
+/* ---- install ---- */
+.install-card{max-width:720px;margin:0 auto;background:var(--sumi);color:var(--cream);border-radius:20px;padding:34px 32px;text-align:center}
+.install-card h2{font-family:var(--serif);font-weight:600;font-size:1.5rem}
+.install-card p{color:rgba(242,235,221,.72);margin:14px auto 22px;max-width:48ch;font-size:.94rem}
+.code{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#15120F;border:1px solid var(--cream-line);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;color:var(--cream);text-align:left;overflow-x:auto}
+.code button{flex:none;background:var(--rikyu);color:#fbf8ef;border:none;border-radius:8px;padding:7px 13px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.code button:hover{background:var(--rikyu-bright)}
+.note{margin-top:18px;font-size:.78rem;color:rgba(242,235,221,.45)}
+
+/* ---- footer ---- */
+footer{padding:60px 0 48px;border-top:1px solid var(--line-soft);text-align:center;color:var(--ink2)}
+footer .req{font-size:.9rem}
+footer .seal{font-family:var(--serif);font-size:1.2rem;color:var(--rikyu-deep);margin:18px 0 6px}
+footer .links{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:18px;font-size:.86rem}
+footer .links a{color:var(--ink);border-bottom:1px solid var(--line)}
+footer .links a:hover{color:var(--rikyu-deep);border-color:var(--rikyu)}
+footer .fine{margin-top:24px;font-size:.76rem;color:var(--ink3)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <nav class="nav">
+    <a class="brand" href="#top">
+      <img src="icon_1024.png" alt="Choritsu icon">
+      <span><span class="ji">調律</span> <span class="ro">Choritsu</span></span>
+    </a>
+    <div class="navlinks">
+      <a class="hide" href="#features">Features</a>
+      <a class="hide" href="#how">How it works</a>
+      <a class="ghost" href="https://github.com/JC-kk/apple-music-lossless-eq">GitHub ↗</a>
+      <a href="#get">Download</a>
+    </div>
+  </nav>
+
+  <div class="herobody" id="top">
+    <svg class="mark" viewBox="0 0 360 184" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Choritsu wave mark">
+      <path d="M40 112 C78 112 92 50 120 46 C150 42 165 104 188 110 C212 116 226 130 250 128 C276 126 292 114 320 112"
+            transform="translate(16,13)" fill="none" stroke="#737842" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M40 112 C78 112 92 50 120 46 C150 42 165 104 188 110 C212 116 226 130 250 128 C276 126 292 114 320 112"
+            fill="none" stroke="#F2EBDD" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="120" cy="46" r="13" fill="#211E1B" stroke="#F2EBDD" stroke-width="5.5"/>
+      <circle cx="250" cy="128" r="13" fill="#211E1B" stroke="#F2EBDD" stroke-width="5.5"/>
+    </svg>
+
+    <h1 class="h1">Choritsu<span class="ji">調律</span></h1>
+    <p class="lede">Keep Apple Music bit-perfect — then tune your headphones to their target curve.</p>
+    <p class="sub">A lossless sample-rate switcher and parametric EQ for Apple Music, in one quiet menu-bar panel. No driver, no admin, nothing left running in the background.</p>
+
+    <div class="cta" id="get">
+      <a class="btn btn-primary" href="https://github.com/JC-kk/apple-music-lossless-eq/releases/download/v2.0.1/Choritsu-2.0.1.zip">↓ Download for macOS</a>
+      <a class="btn btn-ghost" href="https://github.com/JC-kk/apple-music-lossless-eq">View source</a>
+    </div>
+    <p class="meta"><b>macOS 26 Tahoe+</b> · v2.0.1 · free &amp; open source (MIT)</p>
+  </div>
+</header>
+
+<main>
+  <section class="band wrap">
+    <div class="sectionhead">
+      <span class="eyebrow">一目 · A look</span>
+      <h2>One continuous popover</h2>
+      <p>The EQ docks to the right of the main panel — now playing, source-matched rate, and the response curve over a live spectrum.</p>
+    </div>
+    <div class="shot-main"><img src="eq.png" alt="Choritsu with the parametric EQ panel open: an AutoEQ preset imported, the response curve drawn over a live spectrum, draggable band points, and per-band frequency/gain/Q controls"></div>
+    <p class="cap">Sennheiser HD600 AutoEQ preset, applied to Apple Music through a muted process tap.</p>
+    <div class="trio">
+      <figure><img src="main.png" alt="Now playing panel with artwork, transport, the sample-rate card in sync, and the output device with volume"><figcaption>Now playing &amp; source rate</figcaption></figure>
+      <figure><img src="devices.png" alt="Output device picker"><figcaption>Output device picker</figcaption></figure>
+      <figure><img src="rates.png" alt="Sample-rate override menu from 44.1 to 352.8 kHz"><figcaption>Manual rate override</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="feat-band" id="features">
+    <div class="band wrap">
+      <div class="sectionhead">
+        <span class="eyebrow">特長 · Features</span>
+        <h2>Tuning, end to end</h2>
+      </div>
+      <div class="grid">
+        <div class="card"><div class="ji">無損</div><h3>Lossless rate-matching</h3><p>Locks your output device to the track's real sample rate — 44.1 to 192 kHz, within a second of a track change — so macOS never silently resamples behind your back.</p></div>
+        <div class="card"><div class="ji">均衡</div><h3>Parametric EQ</h3><p>A multi-band PEQ for headphones and speakers. Import an AutoEQ preset, drag the response curve, scroll to set Q, watch the live spectrum, keep a profile per pair.</p></div>
+        <div class="card"><div class="ji">無垢</div><h3>No driver, no admin</h3><p>The EQ runs through a muted Core Audio process tap — no virtual sound card, no kernel extension, no admin rights, and clearly marked when it's on.</p></div>
+        <div class="card"><div class="ji">再生</div><h3>Now playing &amp; transport</h3><p>Artwork, title, album, a live progress bar, and play / pause / previous / next — right from the menu bar.</p></div>
+        <div class="card"><div class="ji">硝子</div><h3>Native Liquid Glass</h3><p>Built on real macOS 26 <code>glassEffect</code> materials, in a calm <em>wabi-sabi</em> palette that disappears into the desktop.</p></div>
+        <div class="card"><div class="ji">言語</div><h3>Localized</h3><p>English, 日本語, 简体中文, and 繁體中文 — including the EQ panel.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band wrap" id="how">
+    <div class="sectionhead">
+      <span class="eyebrow">仕組み · How it works</span>
+      <h2>Outside the signal path, until you ask</h2>
+      <p>Choritsu infers the playing track's sample rate from the Core Audio log stream, then changes the same device setting you could change in Audio MIDI Setup — pure HAL property access, nothing in the audio path.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="n">壱 · 01</div><h4>Follow the source</h4><p>Detect the decoded rate and match the output device, debounced so it never flaps mid-track.</p></div>
+      <div class="step"><div class="n">弐 · 02</div><h4>Tap, only if asked</h4><p>Turn on the EQ and a muted process tap feeds Apple Music's audio through a biquad cascade — no driver.</p></div>
+      <div class="step"><div class="n">参 · 03</div><h4>Stay correct</h4><p>EQ coefficients recompute on every rate change, so a correction holds from 44.1 to 192 kHz.</p></div>
+    </div>
+  </section>
+
+  <section class="band wrap">
+    <div class="install-card">
+      <h2>Get Choritsu</h2>
+      <p>Download, unzip, and move <b>Choritsu.app</b> to your Applications folder. The build is ad-hoc signed (not yet notarized), so clear the quarantine flag once:</p>
+      <div class="code"><span>xattr -dr com.apple.quarantine /Applications/Choritsu.app</span><button onclick="navigator.clipboard.writeText('xattr -dr com.apple.quarantine /Applications/Choritsu.app');this.textContent='Copied'">Copy</button></div>
+      <p class="note">macOS 26 Tahoe or later · Apple Music (subscription or local library)</p>
+      <div class="cta" style="margin-top:26px">
+        <a class="btn btn-primary" href="https://github.com/JC-kk/apple-music-lossless-eq/releases/download/v2.0.1/Choritsu-2.0.1.zip">↓ Download v2.0.1</a>
+        <a class="btn btn-ghost" href="https://github.com/JC-kk/apple-music-lossless-eq/releases">All releases</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="seal">調律</p>
+    <p class="req">Made for careful listening · 「音源と、同じ律で。」</p>
+    <div class="links">
+      <a href="https://github.com/JC-kk/apple-music-lossless-eq">GitHub</a>
+      <a href="https://github.com/JC-kk/apple-music-lossless-eq/releases">Releases</a>
+      <a href="https://github.com/JC-kk/apple-music-lossless-eq/blob/main/LICENSE">MIT License</a>
+      <a href="https://github.com/vincentneo/LosslessSwitcher">LosslessSwitcher</a>
+      <a href="https://github.com/jaakkopasanen/AutoEq">AutoEQ</a>
+    </div>
+    <p class="fine">Inspired by LosslessSwitcher. Headphone corrections from AutoEQ. Not affiliated with Apple. Apple Music is a trademark of Apple Inc.</p>
+  </div>
+</footer>
+
+</body>
+</html>
