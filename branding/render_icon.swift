@@ -75,6 +75,27 @@ func drawWave(in ctx: CGContext, color: CGColor, dx: CGFloat, dy: CGFloat) {
     ctx.strokePath()
 }
 
+// EQ band handles: hollow circles sitting on the front wave at the two band
+// centres (the boost peak and the soft cut), drawn as a cream ring around a
+// sumi core so they read as draggable nodes punched onto the curve.
+let nodeT: [Double] = [0.28, 0.72]
+let nodeRadius: CGFloat = 34
+let nodeRing: CGFloat = 14
+
+func drawNodes(in ctx: CGContext) {
+    for t in nodeT {
+        let x = x0 + (x1 - x0) * CGFloat(t)
+        let y = midY + amp * CGFloat(waveResponse(t))
+        let rect = CGRect(x: x - nodeRadius, y: y - nodeRadius,
+                          width: nodeRadius * 2, height: nodeRadius * 2)
+        ctx.setFillColor(sumi)
+        ctx.fillEllipse(in: rect)
+        ctx.setStrokeColor(cream)
+        ctx.setLineWidth(nodeRing)
+        ctx.strokeEllipse(in: rect)
+    }
+}
+
 // The ghost trails to the lower-right of the front wave.
 let ghostDX: CGFloat = 46
 let ghostDY: CGFloat = -30
@@ -86,10 +107,12 @@ composite.setFillColor(sumi)
 composite.fill(CGRect(x: 0, y: 0, width: canvas, height: canvas))
 drawWave(in: composite, color: rikyu, dx: ghostDX, dy: ghostDY)
 drawWave(in: composite, color: cream, dx: 0, dy: 0)
+drawNodes(in: composite)
 save(composite, to: "\(dir)/icon_1024.png")
 
 let frontLayer = makeContext()
 drawWave(in: frontLayer, color: cream, dx: 0, dy: 0)
+drawNodes(in: frontLayer)
 save(frontLayer, to: "\(dir)/layer_front.png")
 
 let backLayer = makeContext()

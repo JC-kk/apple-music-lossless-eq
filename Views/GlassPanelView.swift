@@ -19,28 +19,37 @@ private enum Washi {
 
 // MARK: - Wave mark (app logo)
 
-/// The brand mark: a parametric-EQ response curve (one boost bell, one soft
-/// cut) that doubles as a sine wave. Drawn twice with an offset to leave a
-/// 利休-green afterimage — the output trailing the source sample rate. Same
-/// geometry as `branding/render_icon.swift`, so the logo matches the app icon.
+/// A classic PEQ response (one boost bell, one soft cut), flat at the edges —
+/// the brand mark's curve. Keep in sync with `branding/render_icon.swift`.
+private func waveResponseValue(_ t: Double) -> Double {
+    let boost = exp(-pow((t - 0.28) / 0.14, 2))
+    let cut = 0.30 * exp(-pow((t - 0.72) / 0.17, 2))
+    return boost - cut
+}
+
+/// The two EQ band centres where the handle nodes sit (the peak and the cut).
+private let waveBandT: [Double] = [0.28, 0.72]
+
+private func wavePoint(_ t: Double, in rect: CGRect) -> CGPoint {
+    let x0 = rect.width * 0.15
+    let x1 = rect.width * 0.85
+    let midY = rect.height * 0.54
+    let amp = rect.height * 0.30
+    let x = x0 + (x1 - x0) * CGFloat(t)
+    let y = midY - amp * CGFloat(waveResponseValue(t))   // SwiftUI y is flipped: a boost lifts up
+    return CGPoint(x: x, y: y)
+}
+
+/// The brand mark: a parametric-EQ response curve that doubles as a sine wave,
+/// with draggable band nodes, drawn twice with an offset to leave a 利休-green
+/// afterimage — the output trailing the source sample rate. Same geometry as
+/// `branding/render_icon.swift`, so the logo matches the app icon.
 private struct WaveResponseShape: Shape {
     func path(in rect: CGRect) -> Path {
-        let x0 = rect.width * 0.15
-        let x1 = rect.width * 0.85
-        let span = x1 - x0
-        let midY = rect.height * 0.54
-        let amp = rect.height * 0.30
-        let steps = 56
-
+        let steps = 60
         var path = Path()
         for i in 0...steps {
-            let t = Double(i) / Double(steps)
-            let boost = exp(-pow((t - 0.28) / 0.14, 2))
-            let cut = 0.30 * exp(-pow((t - 0.72) / 0.17, 2))
-            let f = boost - cut
-            let x = x0 + span * CGFloat(t)
-            let y = midY - amp * CGFloat(f)   // SwiftUI y is flipped: a boost lifts up
-            let point = CGPoint(x: x, y: y)
+            let point = wavePoint(Double(i) / Double(steps), in: rect)
             if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         return path
@@ -53,6 +62,8 @@ private struct WaveMark: View {
     var body: some View {
         let line = size * 0.12
         let corner = size * 0.28
+        let nodeR = size * 0.12
+        let rect = CGRect(x: 0, y: 0, width: size, height: size)
         ZStack {
             RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .fill(
@@ -64,6 +75,13 @@ private struct WaveMark: View {
                 .offset(x: size * 0.05, y: size * 0.04)
             WaveResponseShape()
                 .stroke(Washi.paperTop, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+            ForEach(waveBandT.indices, id: \.self) { i in
+                Circle()
+                    .fill(Washi.sumiTop)
+                    .overlay(Circle().strokeBorder(Washi.paperTop, lineWidth: size * 0.05))
+                    .frame(width: nodeR * 2, height: nodeR * 2)
+                    .position(wavePoint(waveBandT[i], in: rect))
+            }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
