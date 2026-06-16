@@ -17,6 +17,64 @@ private enum Washi {
     static let sumiBottom = Color(red: 0.078, green: 0.075, blue: 0.071)
 }
 
+// MARK: - Wave mark (app logo)
+
+/// The brand mark: a parametric-EQ response curve (one boost bell, one soft
+/// cut) that doubles as a sine wave. Drawn twice with an offset to leave a
+/// 利休-green afterimage — the output trailing the source sample rate. Same
+/// geometry as `branding/render_icon.swift`, so the logo matches the app icon.
+private struct WaveResponseShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let x0 = rect.width * 0.15
+        let x1 = rect.width * 0.85
+        let span = x1 - x0
+        let midY = rect.height * 0.54
+        let amp = rect.height * 0.30
+        let steps = 56
+
+        var path = Path()
+        for i in 0...steps {
+            let t = Double(i) / Double(steps)
+            let boost = exp(-pow((t - 0.28) / 0.14, 2))
+            let cut = 0.30 * exp(-pow((t - 0.72) / 0.17, 2))
+            let f = boost - cut
+            let x = x0 + span * CGFloat(t)
+            let y = midY - amp * CGFloat(f)   // SwiftUI y is flipped: a boost lifts up
+            let point = CGPoint(x: x, y: y)
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        return path
+    }
+}
+
+private struct WaveMark: View {
+    var size: CGFloat = 22
+
+    var body: some View {
+        let line = size * 0.12
+        let corner = size * 0.28
+        ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(
+                    LinearGradient(colors: [Washi.sumiTop, Washi.sumiBottom],
+                                   startPoint: .top, endPoint: .bottom)
+                )
+            WaveResponseShape()
+                .stroke(Washi.rikyu, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+                .offset(x: size * 0.05, y: size * 0.04)
+            WaveResponseShape()
+                .stroke(Washi.paperTop, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(.white.opacity(0.10), lineWidth: 0.5)
+        )
+        .accessibilityLabel("Choritsu")
+    }
+}
+
 // MARK: - Panel
 
 struct GlassPanelView: View {
@@ -90,14 +148,7 @@ struct GlassPanelView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Washi.rikyu)
-                .frame(width: 20, height: 20)
-                .overlay(
-                    Text("律")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                )
+            WaveMark(size: 22)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("CHŌRITSU")

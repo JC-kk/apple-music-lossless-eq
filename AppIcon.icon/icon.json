@@ -6,16 +6,16 @@
     {
       "layers" : [
         {
-          "image-name" : "glyph.png",
-          "name" : "glyph"
+          "image-name" : "wave-back.png",
+          "name" : "wave-back"
         }
       ]
     },
     {
       "layers" : [
         {
-          "image-name" : "seal.png",
-          "name" : "seal"
+          "image-name" : "wave-front.png",
+          "name" : "wave-front"
         }
       ]
     }
