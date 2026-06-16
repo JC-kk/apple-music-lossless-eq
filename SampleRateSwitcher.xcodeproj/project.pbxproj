@@ -79,22 +79,12 @@
 		A40000000000000000000002 /*  */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000001 /* SampleRateSwitcherApp.swift */,
-				A20000000000000000000002 /* SampleRateModel.swift */,
-				A20000000000000000000003 /* MusicController.swift */,
-				A20000000000000000000004 /* AudioDeviceController.swift */,
-				A20000000000000000000008 /* MediaRemoteController.swift */,
-				A20000000000000000000009 /* MediaAuthorizationController.swift */,
-				A20000000000000000000010 /* LogStreamController.swift */,
-				A20000000000000000000011 /* GlassPanelView.swift */,
-				A20000000000000000000016 /* PEQModels.swift */,
-				A20000000000000000000017 /* Biquad.swift */,
-				A20000000000000000000018 /* AutoEQParser.swift */,
-				A20000000000000000000019 /* BiquadProcessor.swift */,
-				A20000000000000000000020 /* ProcessTapEngine.swift */,
-				A20000000000000000000021 /* EQModel.swift */,
-				A20000000000000000000022 /* EQView.swift */,
-				A20000000000000000000023 /* SpectrumAnalyzer.swift */,
+				A40000000000000000000010 /* App */,
+				A40000000000000000000011 /* Views */,
+				A40000000000000000000012 /* Models */,
+				A40000000000000000000013 /* Audio */,
+				A40000000000000000000014 /* EQ */,
+				A40000000000000000000015 /* NowPlaying */,
 				A20000000000000000000012 /* AppIcon.icon */,
 				A90000000000000000000001 /* InfoPlist.strings */,
 				A90000000000000000000002 /* Localizable.strings */,
@@ -102,6 +92,64 @@
 				A20000000000000000000007 /* SampleRateSwitcher.entitlements */,
 			);
 			name = "";
+			sourceTree = "<group>";
+		};
+		A40000000000000000000010 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* SampleRateSwitcherApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000011 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000011 /* GlassPanelView.swift */,
+				A20000000000000000000022 /* EQView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000012 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000002 /* SampleRateModel.swift */,
+				A20000000000000000000021 /* EQModel.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000013 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000004 /* AudioDeviceController.swift */,
+				A20000000000000000000020 /* ProcessTapEngine.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000014 /* EQ */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000016 /* PEQModels.swift */,
+				A20000000000000000000017 /* Biquad.swift */,
+				A20000000000000000000019 /* BiquadProcessor.swift */,
+				A20000000000000000000018 /* AutoEQParser.swift */,
+				A20000000000000000000023 /* SpectrumAnalyzer.swift */,
+			);
+			path = EQ;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000015 /* NowPlaying */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000003 /* MusicController.swift */,
+				A20000000000000000000008 /* MediaRemoteController.swift */,
+				A20000000000000000000009 /* MediaAuthorizationController.swift */,
+				A20000000000000000000010 /* LogStreamController.swift */,
+			);
+			path = NowPlaying;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000003 /* Products */ = {
