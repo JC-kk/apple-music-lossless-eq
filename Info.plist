@@ -22,6 +22,8 @@
     <string>Choritsu needs access to Apple Music to read the current track and control playback.</string>
     <key>NSAppleMusicUsageDescription</key>
     <string>Choritsu needs access to Apple Music playback information.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Choritsu taps Apple Music's audio to apply your headphone EQ before it reaches your output device.</string>
     <key>NSMediaLibraryUsageDescription</key>
     <string>Choritsu needs access to your media library to read now playing metadata.</string>
 </dict>

@@ -4,12 +4,12 @@ import AppKit
 // MARK: - 和風 palette
 
 private enum Washi {
-    /// 朱 — vermilion accent
-    static let shu = Color(red: 0.80, green: 0.33, blue: 0.24)
-    /// 藍 — indigo
-    static let ai = Color(red: 0.20, green: 0.33, blue: 0.45)
-    /// 抹茶 — muted green for the in-sync state
-    static let matcha = Color(red: 0.45, green: 0.55, blue: 0.38)
+    /// 利休 — wabi-sabi dark green-gold accent (replaces the old 朱 vermilion)
+    static let rikyu = Color(red: 0.45, green: 0.47, blue: 0.26)
+    /// 藍鼠 — muted indigo-grey
+    static let ai = Color(red: 0.31, green: 0.39, blue: 0.45)
+    /// 苔 — muted moss green for the in-sync state
+    static let matcha = Color(red: 0.44, green: 0.51, blue: 0.39)
 
     static let paperTop = Color(red: 0.969, green: 0.953, blue: 0.918)
     static let paperBottom = Color(red: 0.933, green: 0.910, blue: 0.867)
@@ -21,9 +21,24 @@ private enum Washi {
 
 struct GlassPanelView: View {
     @ObservedObject var model: SampleRateModel
+    @ObservedObject var eq: EQModel
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showEQ = false
 
     var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            mainPanel
+            if showEQ {
+                Divider()
+                EQView(eq: eq)
+                    .transition(.opacity)
+            }
+        }
+        .fontDesign(.rounded)
+        .background(panelBackground)
+    }
+
+    private var mainPanel: some View {
         VStack(spacing: 14) {
             header
             nowPlayingSection
@@ -34,8 +49,6 @@ struct GlassPanelView: View {
         }
         .padding(16)
         .frame(width: 352)
-        .fontDesign(.rounded)
-        .background(panelBackground)
     }
 
     private var panelBackground: some View {
@@ -51,10 +64,34 @@ struct GlassPanelView: View {
 
     // MARK: Header
 
+    private var eqButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.24)) { showEQ.toggle() }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "slider.horizontal.3")
+                Text("PEQ")
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(
+                Capsule().fill(eq.isEnabled ? Washi.rikyu
+                                            : Color.secondary.opacity(showEQ ? 0.22 : 0.12))
+            )
+            .foregroundStyle(eq.isEnabled ? Color.white : Color.primary)
+            .overlay(
+                Capsule().stroke(Washi.rikyu.opacity(showEQ && !eq.isEnabled ? 0.6 : 0), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Headphone EQ")
+    }
+
     private var header: some View {
         HStack(spacing: 10) {
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Washi.shu)
+                .fill(Washi.rikyu)
                 .frame(width: 20, height: 20)
                 .overlay(
                     Text("律")
@@ -72,6 +109,8 @@ struct GlassPanelView: View {
             }
 
             Spacer()
+
+            eqButton
 
             Menu {
                 Toggle("Auto switch", isOn: $model.autoSwitchEnabled)
@@ -163,7 +202,7 @@ struct GlassPanelView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [Washi.shu.opacity(0.9), Washi.shu.opacity(0.55)],
+                                colors: [Washi.rikyu.opacity(0.9), Washi.rikyu.opacity(0.55)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -219,7 +258,7 @@ struct GlassPanelView: View {
                 }
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
-                .tint(Washi.shu)
+                .tint(Washi.rikyu)
 
                 Button {
                     model.nextTrack()
@@ -255,7 +294,7 @@ struct GlassPanelView: View {
                 }
                 .toggleStyle(.switch)
                 .controlSize(.mini)
-                .tint(Washi.shu)
+                .tint(Washi.rikyu)
             }
 
             HStack(alignment: .firstTextBaseline) {
@@ -277,7 +316,7 @@ struct GlassPanelView: View {
 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(rateInSync ? Washi.matcha : Washi.shu)
+                    .foregroundStyle(rateInSync ? Washi.matcha : Washi.rikyu)
 
                 Spacer()
 
@@ -332,7 +371,7 @@ struct GlassPanelView: View {
             if rateInSync {
                 badge("同期 IN SYNC", color: Washi.matcha)
             } else if model.trackSampleRateDisplay.contains("kHz") {
-                badge("未同期 PENDING", color: Washi.shu)
+                badge("未同期 PENDING", color: Washi.rikyu)
             } else {
                 badge("待機 STANDBY", color: .secondary)
             }
@@ -496,7 +535,7 @@ private struct GlassVolumeSlider: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [Washi.shu.opacity(0.85), Washi.shu.opacity(0.6)],
+                            colors: [Washi.rikyu.opacity(0.85), Washi.rikyu.opacity(0.6)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )

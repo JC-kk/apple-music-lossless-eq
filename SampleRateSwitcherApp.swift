@@ -33,10 +33,11 @@ private enum MenuBarSeal {
 @main
 struct SampleRateSwitcherApp: App {
     @StateObject private var model = SampleRateModel()
+    @StateObject private var eq = EQModel()
 
     var body: some Scene {
         MenuBarExtra {
-            GlassPanelView(model: model)
+            GlassPanelView(model: model, eq: eq)
         } label: {
             HStack(spacing: 4) {
                 Image(nsImage: MenuBarSeal.image)

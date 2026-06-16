@@ -17,6 +17,15 @@
 		A10000000000000000000008 /* GlassPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* GlassPanelView.swift */; };
 		A10000000000000000000009 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* AppIcon.icon */; };
 		A10000000000000000000010 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000001 /* InfoPlist.strings */; };
+		A10000000000000000000011 /* PEQModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* PEQModels.swift */; };
+		A10000000000000000000012 /* Biquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* Biquad.swift */; };
+		A10000000000000000000013 /* AutoEQParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* AutoEQParser.swift */; };
+		A10000000000000000000014 /* BiquadProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* BiquadProcessor.swift */; };
+		A10000000000000000000015 /* ProcessTapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* ProcessTapEngine.swift */; };
+		A10000000000000000000016 /* EQModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* EQModel.swift */; };
+		A10000000000000000000017 /* EQView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* EQView.swift */; };
+		A10000000000000000000018 /* SpectrumAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* SpectrumAnalyzer.swift */; };
+		A10000000000000000000019 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000002 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +44,17 @@
 		A20000000000000000000013 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A20000000000000000000014 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A20000000000000000000015 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = "ja.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		A20000000000000000000016 /* PEQModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PEQModels.swift; sourceTree = "<group>"; };
+		A20000000000000000000017 /* Biquad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Biquad.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* AutoEQParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoEQParser.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* BiquadProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiquadProcessor.swift; sourceTree = "<group>"; };
+		A20000000000000000000020 /* ProcessTapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessTapEngine.swift; sourceTree = "<group>"; };
+		A20000000000000000000021 /* EQModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* EQView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EQView.swift; sourceTree = "<group>"; };
+		A20000000000000000000023 /* SpectrumAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumAnalyzer.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A20000000000000000000025 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		A20000000000000000000026 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = "ja.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,8 +87,17 @@
 				A20000000000000000000009 /* MediaAuthorizationController.swift */,
 				A20000000000000000000010 /* LogStreamController.swift */,
 				A20000000000000000000011 /* GlassPanelView.swift */,
+				A20000000000000000000016 /* PEQModels.swift */,
+				A20000000000000000000017 /* Biquad.swift */,
+				A20000000000000000000018 /* AutoEQParser.swift */,
+				A20000000000000000000019 /* BiquadProcessor.swift */,
+				A20000000000000000000020 /* ProcessTapEngine.swift */,
+				A20000000000000000000021 /* EQModel.swift */,
+				A20000000000000000000022 /* EQView.swift */,
+				A20000000000000000000023 /* SpectrumAnalyzer.swift */,
 				A20000000000000000000012 /* AppIcon.icon */,
 				A90000000000000000000001 /* InfoPlist.strings */,
+				A90000000000000000000002 /* Localizable.strings */,
 				A20000000000000000000005 /* Info.plist */,
 				A20000000000000000000007 /* SampleRateSwitcher.entitlements */,
 			);
@@ -139,6 +168,7 @@
 			files = (
 				A10000000000000000000009 /* AppIcon.icon in Resources */,
 				A10000000000000000000010 /* InfoPlist.strings in Resources */,
+				A10000000000000000000019 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -157,6 +187,14 @@
 				A10000000000000000000006 /* MediaAuthorizationController.swift in Sources */,
 				A10000000000000000000007 /* LogStreamController.swift in Sources */,
 				A10000000000000000000008 /* GlassPanelView.swift in Sources */,
+				A10000000000000000000011 /* PEQModels.swift in Sources */,
+				A10000000000000000000012 /* Biquad.swift in Sources */,
+				A10000000000000000000013 /* AutoEQParser.swift in Sources */,
+				A10000000000000000000014 /* BiquadProcessor.swift in Sources */,
+				A10000000000000000000015 /* ProcessTapEngine.swift in Sources */,
+				A10000000000000000000016 /* EQModel.swift in Sources */,
+				A10000000000000000000017 /* EQView.swift in Sources */,
+				A10000000000000000000018 /* SpectrumAnalyzer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,6 +209,16 @@
 				A20000000000000000000015 /* ja */,
 			);
 			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		A90000000000000000000002 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A20000000000000000000024 /* zh-Hans */,
+				A20000000000000000000025 /* zh-Hant */,
+				A20000000000000000000026 /* ja */,
+			);
+			name = Localizable.strings;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
