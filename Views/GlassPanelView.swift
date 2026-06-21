@@ -19,37 +19,36 @@ private enum Washi {
 
 // MARK: - Wave mark (app logo)
 
-/// A classic PEQ response (one boost bell, one soft cut), flat at the edges —
-/// the brand mark's curve. Keep in sync with `branding/render_icon.swift`.
-private func waveResponseValue(_ t: Double) -> Double {
-    let boost = exp(-pow((t - 0.28) / 0.14, 2))
-    let cut = 0.30 * exp(-pow((t - 0.72) / 0.17, 2))
-    return boost - cut
+/// One sine cycle — the brand mark's wave. Keep in sync with
+/// `branding/render_icon.swift`.
+private func waveSine(_ t: Double, phase: Double = 0) -> Double {
+    sin(t * 2 * .pi + phase)
 }
 
-/// The two EQ band centres where the handle nodes sit (the peak and the cut).
-private let waveBandT: [Double] = [0.28, 0.72]
+/// The two band centres where the handle nodes sit (the crest and the trough).
+private let waveBandT: [Double] = [0.25, 0.75]
 
-private func wavePoint(_ t: Double, in rect: CGRect) -> CGPoint {
-    let x0 = rect.width * 0.15
-    let x1 = rect.width * 0.85
-    let midY = rect.height * 0.54
-    let amp = rect.height * 0.30
+private func wavePoint(_ t: Double, phase: Double = 0, in rect: CGRect) -> CGPoint {
+    let x0 = rect.width * 0.14
+    let x1 = rect.width * 0.86
+    let midY = rect.height * 0.5
+    let amp = rect.height * 0.27
     let x = x0 + (x1 - x0) * CGFloat(t)
-    let y = midY - amp * CGFloat(waveResponseValue(t))   // SwiftUI y is flipped: a boost lifts up
+    let y = midY - amp * CGFloat(waveSine(t, phase: phase))   // SwiftUI y is flipped: a crest lifts up
     return CGPoint(x: x, y: y)
 }
 
-/// The brand mark: a parametric-EQ response curve that doubles as a sine wave,
-/// with draggable band nodes, drawn twice with an offset to leave a 利休-green
-/// afterimage — the output trailing the source sample rate. Same geometry as
+/// The brand mark: a sine wave with draggable band nodes, drawn twice — a
+/// 利休-green wave staggered behind the paper one (a phase-shifted afterimage:
+/// the output trailing the source sample rate). Same geometry as
 /// `branding/render_icon.swift`, so the logo matches the app icon.
 private struct WaveResponseShape: Shape {
+    var phase: Double = 0
     func path(in rect: CGRect) -> Path {
-        let steps = 60
+        let steps = 80
         var path = Path()
         for i in 0...steps {
-            let point = wavePoint(Double(i) / Double(steps), in: rect)
+            let point = wavePoint(Double(i) / Double(steps), phase: phase, in: rect)
             if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         return path
@@ -70,9 +69,9 @@ private struct WaveMark: View {
                     LinearGradient(colors: [Washi.sumiTop, Washi.sumiBottom],
                                    startPoint: .top, endPoint: .bottom)
                 )
-            WaveResponseShape()
+            WaveResponseShape(phase: 0.62)
                 .stroke(Washi.rikyu, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
-                .offset(x: size * 0.05, y: size * 0.04)
+                .offset(x: size * 0.035, y: size * 0.05)
             WaveResponseShape()
                 .stroke(Washi.paperTop, style: StrokeStyle(lineWidth: line, lineCap: .round, lineJoin: .round))
             ForEach(waveBandT.indices, id: \.self) { i in
@@ -107,7 +106,6 @@ struct GlassPanelView: View {
             if showEQ {
                 Divider()
                 EQView(eq: eq)
-                    .transition(.opacity)
             }
         }
         .fontDesign(.rounded)
@@ -142,7 +140,7 @@ struct GlassPanelView: View {
 
     private var eqButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.24)) { showEQ.toggle() }
+            showEQ.toggle()
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "slider.horizontal.3")
@@ -194,12 +192,12 @@ struct GlassPanelView: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 26, height: 26)
+                    .frame(width: 28, height: 28)
+                    .glassEffect(.regular, in: Circle())
                     .contentShape(Circle())
             }
             .menuStyle(.button)
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
+            .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
         }
@@ -303,43 +301,41 @@ struct GlassPanelView: View {
     // MARK: Transport
 
     private var transportSection: some View {
-        GlassEffectContainer(spacing: 18) {
-            HStack(spacing: 18) {
-                Button {
-                    model.previousTrack()
-                } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-
-                Button {
-                    model.togglePlayPause()
-                } label: {
-                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: 56, height: 56)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.circle)
-                .tint(Washi.rikyu)
-
-                Button {
-                    model.nextTrack()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
+        HStack(spacing: 18) {
+            Button {
+                model.previousTrack()
+            } label: {
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular, in: Circle())
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+
+            Button {
+                model.togglePlayPause()
+            } label: {
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 56)
+                    .glassEffect(.regular.tint(Washi.rikyu), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                model.nextTrack()
+            } label: {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
     }
@@ -612,7 +608,7 @@ private struct GlassVolumeSlider: View {
                     .frame(width: max(8, geo.size.width * value))
             }
             .clipShape(Capsule())
-            .glassEffect(.regular.interactive(), in: .capsule)
+            .glassEffect(.regular, in: .capsule)
             .contentShape(Capsule())
             .gesture(
                 DragGesture(minimumDistance: 0)

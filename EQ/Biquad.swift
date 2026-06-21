@@ -120,22 +120,44 @@ enum PEQResponse {
     }
 
     /// A log-spaced response curve over `[fMin, fMax]` for plotting.
+    ///
+    /// On top of the evenly log-spaced grid, each enabled band's centre
+    /// frequency and -3 dB skirts are injected into the sample set. A high-Q
+    /// peak is narrow enough to fall *between* grid points, which renders its
+    /// apex too short and quantises the tip's width to the grid spacing — so the
+    /// peak would stop looking sharper as Q climbs past ~1. Sampling each peak at
+    /// its centre guarantees the apex and width are drawn faithfully at any Q.
     static func curve(profile: PEQProfile,
                       sampleRate: Double,
                       fMin: Double = 20,
                       fMax: Double = 20_000,
-                      points: Int = 240) -> [Point] {
+                      points: Int = 480) -> [Point] {
         guard points > 1, fMin > 0, fMax > fMin else { return [] }
         let logMin = log10(fMin)
         let logMax = log10(fMax)
         let nyquist = sampleRate / 2
 
-        return (0..<points).map { index in
-            let t = Double(index) / Double(points - 1)
-            let frequency = min(pow(10.0, logMin + t * (logMax - logMin)), nyquist - 1)
-            return Point(frequency: frequency,
+        var frequencies = (0..<points).map { index in
+            pow(10.0, logMin + Double(index) / Double(points - 1) * (logMax - logMin))
+        }
+
+        for band in profile.bands where band.isEnabled {
+            let fc = band.frequency
+            guard fc > fMin, fc < fMax else { continue }
+            let halfBandwidth = fc / max(band.q, 0.1) / 2     // ≈ half the -3 dB width
+            for offset in [-2.0, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 2] {
+                let f = fc + offset * halfBandwidth
+                if f > fMin, f < fMax { frequencies.append(f) }
+            }
+        }
+
+        frequencies.sort()
+
+        return frequencies.map { frequency in
+            let f = min(frequency, nyquist - 1)
+            return Point(frequency: f,
                          db: magnitudeDB(profile: profile,
-                                         frequency: frequency,
+                                         frequency: f,
                                          sampleRate: sampleRate))
         }
     }

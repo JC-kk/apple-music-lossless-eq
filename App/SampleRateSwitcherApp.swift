@@ -6,9 +6,7 @@ import AppKit
 // bar appearance. Same curve as the app icon and the in-panel logo.
 private enum MenuBarMark {
     static func response(_ t: Double) -> Double {
-        let boost = exp(-pow((t - 0.28) / 0.14, 2))
-        let cut = 0.30 * exp(-pow((t - 0.72) / 0.17, 2))
-        return boost - cut
+        sin(t * 2 * .pi)   // one sine cycle — matches the app icon
     }
 
     static let image: NSImage = {
@@ -23,7 +21,7 @@ private enum MenuBarMark {
 
             func point(_ t: Double) -> NSPoint {
                 NSPoint(x: x0 + (x1 - x0) * CGFloat(t),
-                        y: midY + amp * CGFloat(response(t)))   // y-up (unflipped): a boost lifts up
+                        y: midY + amp * CGFloat(response(t)))   // y-up (unflipped): a crest lifts up
             }
 
             let wave = NSBezierPath()
@@ -40,7 +38,7 @@ private enum MenuBarMark {
 
             // Band handles: punch a hole through the curve, then ring it.
             let r: CGFloat = 2.0
-            for t in [0.28, 0.72] {
+            for t in [0.25, 0.75] {
                 let c = point(t)
                 let box = CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)
                 cgContext.setBlendMode(.destinationOut)

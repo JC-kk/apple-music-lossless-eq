@@ -3,9 +3,10 @@ import Accelerate
 
 /// Real-time spectrum analyzer for the EQ window. The audio engine pushes
 /// post-EQ output samples in via `append` (audio thread, lock-free ring write);
-/// a 30 fps timer on the main run loop runs a windowed FFT and publishes
-/// log-spaced, smoothed magnitudes for drawing. Because it analyses the
-/// processed output, the displayed spectrum reflects EQ changes live.
+/// a 24 fps timer on the main run loop runs a windowed FFT and publishes
+/// log-spaced magnitudes, smoothed across neighbouring bins and over time so
+/// the curve reads as a soft envelope rather than spiky bars. Because it
+/// analyses the processed output, the displayed spectrum reflects EQ live.
 final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
     /// Normalised magnitudes (0…1), one per display bin, log-spaced 20 Hz–20 kHz.
     @Published private(set) var levels: [Float]
@@ -13,7 +14,7 @@ final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
     /// Updated by the engine when the device sample rate changes (for bin→freq).
     var sampleRate: Double = 48_000
 
-    let binCount = 96
+    let binCount = 64
     private let fftSize = 2048
     private let halfSize = 1024
     private let ringSize = 8192          // power of two for cheap masking
@@ -25,6 +26,7 @@ final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
     private var realp: [Float]
     private var imagp: [Float]
     private var magnitudes: [Float]
+    private var raw: [Float]
     private var smoothed: [Float]
 
     private var ring: [Float]
@@ -40,6 +42,7 @@ final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
         realp = [Float](repeating: 0, count: halfSize)
         imagp = [Float](repeating: 0, count: halfSize)
         magnitudes = [Float](repeating: 0, count: halfSize)
+        raw = [Float](repeating: 0, count: binCount)
         smoothed = [Float](repeating: 0, count: binCount)
         ring = [Float](repeating: 0, count: ringSize)
         levels = [Float](repeating: 0, count: binCount)
@@ -60,7 +63,7 @@ final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
 
     func start() {
         stop()
-        let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0 / 24.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -103,9 +106,16 @@ final class SpectrumAnalyzer: ObservableObject, @unchecked Sendable {
             var bin = Int((freq / nyquist) * Double(halfSize))
             bin = min(max(bin, 1), halfSize - 1)
             let db = 20.0 * log10(magnitudes[bin] * scale + 1e-7)
-            let level = Float(min(max((db + 80.0) / 80.0, 0), 1))   // −80…0 dB → 0…1
-            // fast attack, slow decay
-            smoothed[i] = level > smoothed[i] ? level : smoothed[i] * 0.82 + level * 0.18
+            raw[i] = Float(min(max((db + 80.0) / 80.0, 0), 1))   // −80…0 dB → 0…1
+        }
+        // Round off sharp peaks: blend each bin with its neighbours (a [1,2,1]
+        // kernel), then ease toward it with a gentle attack and slow release so
+        // the spectrum reads as a soft envelope rather than spiky bars.
+        for i in 0..<binCount {
+            let lo = max(0, i - 1), hi = min(binCount - 1, i + 1)
+            let blended = (raw[lo] + 2 * raw[i] + raw[hi]) / 4
+            let coeff: Float = blended > smoothed[i] ? 0.45 : 0.15
+            smoothed[i] = smoothed[i] * (1 - coeff) + blended * coeff
         }
         levels = smoothed
     }

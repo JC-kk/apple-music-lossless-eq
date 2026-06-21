@@ -24,12 +24,12 @@ struct EQView: View {
             EQGraph(profile: $eq.profile,
                     analyzer: eq.analyzer,
                     selectedBand: $selectedBand)
-                .frame(minHeight: 220)
+                .frame(height: 220)
                 .padding(12)
             hint
             Divider()
             bandTable
-                .frame(minHeight: 130)
+                .frame(height: 160)
             statusBar
         }
         .frame(width: 470)
@@ -75,12 +75,30 @@ struct EQView: View {
 
                 Spacer()
 
-                Button { importAutoEQ() } label: { Label("Import", systemImage: "square.and.arrow.down") }
-                    .help("Import AutoEQ…")
-                Button { eq.addBand() } label: { Image(systemName: "plus") }
-                    .help("Add")
-                Button(role: .destructive) { eq.resetFlat() } label: { Image(systemName: "arrow.counterclockwise") }
-                    .help("Flat")
+                Button { importAutoEQ() } label: {
+                    Image(systemName: "square.and.arrow.down")
+                        .frame(width: 42, height: 26)
+                        .glassEffect(.regular, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Import AutoEQ…")
+                Button { eq.addBand() } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 42, height: 26)
+                        .glassEffect(.regular, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Add")
+                Button { eq.resetFlat() } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .frame(width: 42, height: 26)
+                        .glassEffect(.regular, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Flat")
             }
 
             HStack(spacing: 10) {
@@ -177,6 +195,10 @@ struct EQView: View {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.plainText, .text]
         panel.message = String(localized: "Choose an AutoEQ ParametricEQ.txt file")
+
+        // Choritsu runs as a menu-bar accessory app, so it's never the active
+        // app — without this the open panel opens *behind* the frontmost app.
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url {
             eq.importAutoEQ(from: url)
         }
@@ -200,7 +222,7 @@ private struct BandRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Toggle("", isOn: $band.isEnabled).labelsHidden()
+            Toggle("", isOn: $band.isEnabled).labelsHidden().tint(EQWashi.rikyu)
 
             Picker("", selection: $band.type) {
                 ForEach(PEQFilterType.allCases) { type in
@@ -259,7 +281,9 @@ private struct BandRow: View {
 
 private struct EQGraph: View {
     @Binding var profile: PEQProfile
-    @ObservedObject var analyzer: SpectrumAnalyzer
+    /// Held, not observed: the spectrum repaints inside `SpectrumView` so its
+    /// 24 fps updates don't drag the static grid + curve into every frame.
+    let analyzer: SpectrumAnalyzer
     @Binding var selectedBand: PEQBand.ID?
     @Environment(\.colorScheme) private var colorScheme
 
@@ -272,8 +296,13 @@ private struct EQGraph: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
+                // Dynamic layer: the spectrum repaints ~24×/s, isolated in its
+                // own analyzer-observing view.
+                SpectrumView(analyzer: analyzer, colorScheme: colorScheme)
+
+                // Static layer: grid + response curve, repainted only when the
+                // profile or appearance changes — not on every spectrum frame.
                 Canvas { context, size in
-                    drawSpectrum(context, size)
                     drawGrid(context, size)
                     drawCurve(context, size)
                 }
@@ -297,21 +326,6 @@ private struct EQGraph: View {
     // MARK: Drawing
 
     private var gridColor: Color { (colorScheme == .dark ? Color.white : Color.black).opacity(0.10) }
-
-    private func drawSpectrum(_ context: GraphicsContext, _ size: CGSize) {
-        let levels = analyzer.levels
-        guard levels.count > 1 else { return }
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: size.height))
-        for i in levels.indices {
-            let x = CGFloat(i) / CGFloat(levels.count - 1) * size.width
-            let y = size.height - CGFloat(levels[i]) * size.height
-            path.addLine(to: CGPoint(x: x, y: y))
-        }
-        path.addLine(to: CGPoint(x: size.width, y: size.height))
-        path.closeSubpath()
-        context.fill(path, with: .color(EQWashi.ai.opacity(colorScheme == .dark ? 0.35 : 0.22)))
-    }
 
     private func drawGrid(_ context: GraphicsContext, _ size: CGSize) {
         for f in [20.0, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000] {
@@ -337,7 +351,7 @@ private struct EQGraph: View {
 
     private func drawCurve(_ context: GraphicsContext, _ size: CGSize) {
         let points = PEQResponse.curve(profile: profile, sampleRate: displaySampleRate,
-                                       fMin: fMin, fMax: fMax, points: 220)
+                                       fMin: fMin, fMax: fMax, points: 480)
         guard points.count > 1 else { return }
         var line = Path()
         for (index, point) in points.enumerated() {
@@ -402,6 +416,33 @@ private struct EQGraph: View {
 
     private func clampFreq(_ f: Double) -> Double { min(max(f, fMin), fMax) }
     private func clampGain(_ g: Double) -> Double { (min(max(g, -dbRange), dbRange) * 10).rounded() / 10 }
+}
+
+// MARK: - Spectrum layer
+
+/// The live spectrum fill. Isolated in its own view that observes the analyzer,
+/// so its ~24 fps repaints don't invalidate the static grid + curve `Canvas`
+/// stacked above it.
+private struct SpectrumView: View {
+    @ObservedObject var analyzer: SpectrumAnalyzer
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        Canvas { context, size in
+            let levels = analyzer.levels
+            guard levels.count > 1 else { return }
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height))
+            for i in levels.indices {
+                let x = CGFloat(i) / CGFloat(levels.count - 1) * size.width
+                let y = size.height - CGFloat(levels[i]) * size.height
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+            path.addLine(to: CGPoint(x: size.width, y: size.height))
+            path.closeSubpath()
+            context.fill(path, with: .color(EQWashi.ai.opacity(colorScheme == .dark ? 0.35 : 0.22)))
+        }
+    }
 }
 
 // MARK: - Scroll-wheel capture (for Q on the graph)

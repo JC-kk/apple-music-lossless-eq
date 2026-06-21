@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/icon_1024.png" width="128" alt="Choritsu icon — two offset sine waves on sumi ink: a cream parametric-EQ curve shadowed by a 利休-green afterimage">
+  <img src="branding/icon_1024.png" width="128" alt="Choritsu icon — two offset sine waves on sumi ink: a cream wave carrying two EQ band nodes, shadowed by a 利休-green afterimage">
 </p>
 
 <h1 align="center">Choritsu · 調律</h1>
@@ -101,7 +101,7 @@ No network access, no analytics, nothing leaves your machine.
 
 **調律** (*chōritsu*) is the Japanese word for tuning an instrument — what a piano technician does, and what this app does to your listening chain. In classical East Asian music theory the twelve-tone system is literally called 十二律, "the twelve ritsu".
 
-The icon drops the literal kanji for something you can read at a glance: **two offset sine waves** on sumi ink. The cream wave traces a parametric-EQ response curve — one boost, one gentle cut — and the **利休**-green wave behind it is its *afterimage*: the output trailing the source as the sample rate shifts. One mark for both halves of the app, the EQ and the rate-sync, and the same mark sits in the app's top-left corner.
+The icon drops the literal kanji for something you can read at a glance: **two offset sine waves** on sumi ink. The cream wave is the signal — with two draggable EQ band nodes riding its crest and trough — and the **利休**-green wave behind it is its *afterimage*: the output trailing the source as the sample rate shifts. One mark for both halves of the app, the EQ and the rate-sync, and the same mark sits in the app's top-left corner.
 
 The icon ships as a hand-authored Icon Composer `.icon` bundle (`AppIcon.icon`) with the two waves on separate layers, so the system parallaxes them into real Liquid Glass depth. `branding/render_icon.swift` regenerates the bitmaps from code.
 
