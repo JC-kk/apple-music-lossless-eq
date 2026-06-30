@@ -2,6 +2,181 @@ import Foundation
 import AppKit
 import CoreAudio
 
+private enum PlaybackMode {
+    case stopped
+    case paused
+    case playing
+}
+
+private struct PlaybackStateMachine {
+    private(set) var mode: PlaybackMode = .stopped
+    private(set) var trackID: String?
+    private(set) var title: String?
+    private(set) var artist: String?
+    private(set) var album: String?
+    private(set) var albumArtist: String?
+    private(set) var duration: Double?
+    private(set) var playbackStartTime: Date?
+
+    private var anchorPosition: Double?
+    private var anchorDate: Date?
+
+    var isPlaying: Bool {
+        mode == .playing
+    }
+
+    var hasTrack: Bool {
+        title != nil
+    }
+
+    mutating func applyPlayerInfo(_ info: MusicPlayerInfo, trackID: String, now: Date) -> Bool {
+        let changedTrack = self.trackID != trackID
+        if changedTrack {
+            self.trackID = trackID
+            title = info.title
+            artist = info.artist
+            album = info.album
+            albumArtist = info.albumArtist
+            duration = info.duration
+            if let position = info.position {
+                anchorPosition = position
+                anchorDate = now
+            } else if info.isPlaying {
+                anchorPosition = 0
+                anchorDate = now
+            } else {
+                anchorPosition = nil
+                anchorDate = nil
+            }
+            playbackStartTime = info.isPlaying ? now : nil
+        } else {
+            title = info.title ?? title
+            artist = info.artist ?? artist
+            album = info.album ?? album
+            albumArtist = info.albumArtist ?? albumArtist
+            duration = info.duration ?? duration
+            if let position = info.position {
+                anchorPosition = position
+                anchorDate = now
+            } else if info.isPlaying {
+                if anchorPosition == nil {
+                    anchorPosition = 0
+                }
+                anchorDate = now
+            }
+            if info.isPlaying, playbackStartTime == nil {
+                playbackStartTime = now
+            }
+        }
+
+        mode = info.isPlaying ? .playing : .paused
+        if !info.isPlaying {
+            playbackStartTime = nil
+        }
+        return changedTrack
+    }
+
+    mutating func applyMediaRemote(_ info: NowPlayingInfo, trackID: String, now: Date, trustPlaybackState: Bool) -> Bool {
+        let changedTrack = self.trackID != trackID
+        if changedTrack || self.trackID == nil {
+            self.trackID = trackID
+            title = info.title
+            artist = info.artist
+            album = info.album
+            albumArtist = info.artist
+            duration = info.duration
+        } else {
+            title = title ?? info.title
+            artist = artist ?? info.artist
+            album = album ?? info.album
+            duration = info.duration ?? duration
+        }
+
+        applyMediaRemoteTiming(info, now: now)
+
+        guard trustPlaybackState else {
+            return changedTrack
+        }
+
+        mode = info.isPlaying ? .playing : .paused
+        playbackStartTime = info.isPlaying ? (playbackStartTime ?? now) : nil
+        return changedTrack
+    }
+
+    mutating func applyMediaRemoteTiming(_ info: NowPlayingInfo, now: Date) {
+        duration = info.duration ?? duration
+
+        guard let elapsed = info.elapsed else {
+            return
+        }
+
+        let projected: Double
+        if mode == .playing, info.isPlaying, let timestamp = info.timestamp {
+            projected = elapsed + now.timeIntervalSince(timestamp)
+        } else {
+            projected = elapsed
+        }
+
+        anchorPosition = min(max(projected, 0), duration ?? projected)
+        anchorDate = mode == .playing ? now : nil
+    }
+
+    mutating func applyDuration(_ duration: Double?) {
+        guard let duration, duration > 0 else { return }
+        self.duration = duration
+    }
+
+    mutating func applyExternalPosition(_ position: Double, now: Date) {
+        guard position.isFinite, position >= 0 else {
+            return
+        }
+
+        anchorPosition = min(position, duration ?? position)
+        anchorDate = mode == .playing ? now : nil
+        if mode == .playing, playbackStartTime == nil {
+            playbackStartTime = now.addingTimeInterval(-position)
+        }
+    }
+
+    mutating func stop() {
+        mode = .stopped
+        trackID = nil
+        title = nil
+        artist = nil
+        album = nil
+        albumArtist = nil
+        duration = nil
+        playbackStartTime = nil
+        anchorPosition = nil
+        anchorDate = nil
+    }
+
+    mutating func project(now: Date = Date()) {
+        guard mode == .playing,
+              let anchorPosition,
+              let anchorDate else {
+            return
+        }
+
+        let projected = anchorPosition + now.timeIntervalSince(anchorDate)
+        self.anchorPosition = min(projected, duration ?? projected)
+        self.anchorDate = now
+    }
+
+    func projectedPosition(now: Date = Date()) -> Double? {
+        guard let anchorPosition else {
+            return nil
+        }
+
+        guard mode == .playing, let anchorDate else {
+            return anchorPosition
+        }
+
+        let projected = anchorPosition + now.timeIntervalSince(anchorDate)
+        return min(projected, duration ?? projected)
+    }
+}
+
 final class SampleRateModel: ObservableObject {
     @Published var currentTrackTitle: String = "Not playing"
     @Published var artistName: String = ""
@@ -40,18 +215,20 @@ final class SampleRateModel: ObservableObject {
     private let musicController = MusicController()
     private let logController = LogStreamController()
     private let audioController = AudioDeviceController()
+    private let artworkFetchQueue = DispatchQueue(label: "Choritsu.music-artwork")
+    private let positionFetchQueue = DispatchQueue(label: "Choritsu.music-position")
     private var timer: Timer?
+    private var playbackState = PlaybackStateMachine()
     private var latestLogCandidateRate: Double?
     private var stableLogSampleRate: Double?
     private var stableLogSampleRateAt: Date?
+    private var stableSampleRateSourceDisplay: String = "Log (locked)"
     private var logRateWindow: [(rate: Double, date: Date, weight: Int)] = []
     private var lastHandledRate: Double?
     private var maxRateForCurrentTrack: Double?
-    private var playbackStartTime: Date?
     private var lastTrackTitle: String?
     private var lastTrackID: String?
     private var currentAlbumID: String?
-    private var lastNotificationTrackID: String?
     private var notificationTrackName: String?
     private var lastPlayerInfoAt: Date?
     private var hasLookaheadActivity = false
@@ -62,6 +239,8 @@ final class SampleRateModel: ObservableObject {
     private var lastAppliedAt: Date?
     private var lastArtworkData: Data?
     private var artworkTrackTitle: String?
+    private var artworkFetchGeneration = 0
+    private var isFetchingMusicPosition = false
     private var isAdjustingVolume = false
     private var isSwitchingRate = false
     private var isPreemptivelyPaused = false
@@ -218,37 +397,41 @@ final class SampleRateModel: ObservableObject {
             if info.state == "Stopped" || info.state == "Unknown" {
                 notificationTrackName = nil
                 lastPlayerInfoAt = nil
+                playbackState.stop()
+                publishPlaybackState()
                 cancelPreemptivePause()
             }
             logStatusMessage = "Skipping transient notification"
             return
         }
 
-        let notificationID = identityKey([title, info.artist, info.album, info.albumArtist])
-        if lastNotificationTrackID == notificationID, isPlaying == info.isPlaying {
-            return
-        }
-        lastNotificationTrackID = notificationID
+        let notificationID = identityKey([title, info.artist, info.album])
 
         notificationTrackName = title
-        lastPlayerInfoAt = Date()
-        currentTrackTitle = title
-        artistName = info.artist ?? ""
-        albumName = info.album ?? ""
-        isPlaying = info.isPlaying
+        let now = Date()
+        lastPlayerInfoAt = now
+        let trackChanged = playbackState.applyPlayerInfo(info, trackID: notificationID, now: now)
+        publishPlaybackState(now: now)
+        if trackChanged {
+            resetArtworkForTrack(title)
+        }
+        scheduleMusicArtworkFetch(for: title)
 
         updateTrackIdentity(title: title,
                             artist: info.artist,
                             album: info.album,
                             albumArtist: info.albumArtist,
                             isPlaying: info.isPlaying,
-                            position: info.position)
+                            position: playbackState.projectedPosition(now: now))
         scheduleQuickRefresh()
     }
 
     private func updateState() {
         let outputDevice = audioController.defaultOutputDeviceInfo()
-        let fallbackTrack = TrackFetchResult(track: nil, errorMessage: nil)
+
+        playbackState.project()
+        publishPlaybackState()
+        scheduleMusicPositionSync()
 
         outputDeviceName = outputDevice.name
         outputDeviceIcon = outputDevice.iconName
@@ -274,15 +457,13 @@ final class SampleRateModel: ObservableObject {
         mediaRemoteController.nowPlayingInfo { [weak self] result in
             DispatchQueue.main.async {
                 self?.applyNowPlaying(result,
-                                      outputDevice: outputDevice,
-                                      fallback: fallbackTrack)
+                                      outputDevice: outputDevice)
             }
         }
     }
 
     private func applyNowPlaying(_ result: NowPlayingResult,
-                                 outputDevice: OutputDeviceInfo,
-                                 fallback: TrackFetchResult) {
+                                 outputDevice: OutputDeviceInfo) {
         if let errorMessage = result.errorMessage, !errorMessage.isEmpty {
             currentTrackTitle = "Unavailable"
             trackSampleRateDisplay = "Unknown"
@@ -291,34 +472,47 @@ final class SampleRateModel: ObservableObject {
         }
 
         let info = result.info
-        let fallbackTrack = fallback.track
 
-        var resolvedTitle = info?.title ?? ""
-        if resolvedTitle.isEmpty || resolvedTitle == "Unknown", let fallbackTrack {
-            resolvedTitle = fallbackTrack.title
-        }
+        let resolvedTitle = info?.title ?? ""
 
-        guard !resolvedTitle.isEmpty else {
-            currentTrackTitle = "Not playing"
-            artistName = ""
-            albumName = ""
-            isPlaying = false
-            elapsedSeconds = nil
-            durationSeconds = nil
-            updateArtwork(nil)
+        if shouldPreservePlayerInfoState(for: resolvedTitle) {
+            playbackState.project()
+            publishPlaybackState()
             updateCurrentSampleRateDisplay()
-            statusMessage = fallback.errorMessage ?? ""
+            statusMessage = isPlaying ? "Waiting for log sample rate" : "Paused"
             return
         }
 
-        let resolvedArtist = info?.artist ?? fallbackTrack?.artist
-        let resolvedAlbum = info?.album ?? fallbackTrack?.album
-        currentTrackTitle = resolvedTitle
-        artistName = resolvedArtist ?? ""
-        albumName = resolvedAlbum ?? ""
-        isPlaying = info?.isPlaying ?? fallbackTrack?.isPlaying ?? false
-        durationSeconds = info?.duration ?? fallbackTrack?.duration
-        updateElapsed(info: info, fallback: fallbackTrack)
+        guard !resolvedTitle.isEmpty else {
+            playbackState.stop()
+            publishPlaybackState()
+            updateArtwork(nil)
+            updateCurrentSampleRateDisplay()
+            statusMessage = ""
+            return
+        }
+
+        let resolvedArtist = info?.artist
+        let resolvedAlbum = info?.album
+
+        if let info {
+            let mediaRemoteTrackID = identityKey([resolvedTitle, resolvedArtist, resolvedAlbum])
+            let trustMediaRemotePlayback = lastPlayerInfoAt == nil || !musicController.isRunning
+            if trustMediaRemotePlayback {
+                _ = playbackState.applyMediaRemote(info,
+                                                   trackID: mediaRemoteTrackID,
+                                                   now: Date(),
+                                                   trustPlaybackState: true)
+            } else if isCurrentPlaybackTrack(id: mediaRemoteTrackID,
+                                             title: resolvedTitle,
+                                             artist: resolvedArtist,
+                                             album: resolvedAlbum) {
+                playbackState.applyMediaRemoteTiming(info, now: Date())
+            }
+            applyMediaRemoteSampleRate(info.sampleRate)
+        }
+        publishPlaybackState()
+
         updateTrackIdentity(title: resolvedTitle,
                             artist: resolvedArtist,
                             album: resolvedAlbum,
@@ -340,7 +534,7 @@ final class SampleRateModel: ObservableObject {
         }
 
         guard let targetSampleRate = stableLogSampleRate else {
-            statusMessage = "Waiting for log sample rate"
+            statusMessage = logParserEnabled ? "Waiting for log sample rate" : "Playing"
             return
         }
 
@@ -349,34 +543,151 @@ final class SampleRateModel: ObservableObject {
                            position: elapsedSeconds)
     }
 
-    private func updateElapsed(info: NowPlayingInfo?, fallback: TrackInfo?) {
-        if let elapsed = info?.elapsed {
-            if isPlaying, let timestamp = info?.timestamp {
-                let projected = elapsed + Date().timeIntervalSince(timestamp)
-                elapsedSeconds = min(projected, durationSeconds ?? projected)
-            } else {
-                elapsedSeconds = elapsed
-            }
-        } else {
-            elapsedSeconds = fallback?.position
+    private func publishPlaybackState(now: Date = Date()) {
+        guard playbackState.hasTrack else {
+            currentTrackTitle = "Not playing"
+            artistName = ""
+            albumName = ""
+            isPlaying = false
+            elapsedSeconds = nil
+            durationSeconds = nil
+            return
         }
+
+        currentTrackTitle = playbackState.title ?? "Not playing"
+        artistName = playbackState.artist ?? ""
+        albumName = playbackState.album ?? ""
+        isPlaying = playbackState.isPlaying
+        elapsedSeconds = playbackState.projectedPosition(now: now)
+        durationSeconds = playbackState.duration
+    }
+
+    private func scheduleMusicPositionSync() {
+        guard playbackState.hasTrack,
+              musicController.isRunning,
+              !isFetchingMusicPosition else {
+            return
+        }
+
+        isFetchingMusicPosition = true
+        positionFetchQueue.async { [weak self] in
+            guard let self else { return }
+            let position = self.musicController.playerPosition()
+            DispatchQueue.main.async {
+                self.isFetchingMusicPosition = false
+                guard let position,
+                      self.playbackState.hasTrack else {
+                    return
+                }
+
+                let now = Date()
+                self.playbackState.applyExternalPosition(position, now: now)
+                self.publishPlaybackState(now: now)
+            }
+        }
+    }
+
+    private func shouldPreservePlayerInfoState(for mediaRemoteTitle: String) -> Bool {
+        guard mediaRemoteTitle.isEmpty || mediaRemoteTitle == "Unknown",
+              notificationTrackName != nil,
+              musicController.isRunning else {
+            return false
+        }
+
+        return true
+    }
+
+    private func isCurrentPlaybackTrack(id: String,
+                                        title: String,
+                                        artist: String?,
+                                        album: String?) -> Bool {
+        if id == playbackState.trackID {
+            return true
+        }
+
+        guard normalizedIdentityComponent(title) == normalizedIdentityComponent(playbackState.title ?? "") else {
+            return false
+        }
+
+        let mediaArtist = normalizedIdentityComponent(artist ?? "")
+        let stateArtist = normalizedIdentityComponent(playbackState.artist ?? "")
+        if !mediaArtist.isEmpty, !stateArtist.isEmpty, mediaArtist != stateArtist {
+            return false
+        }
+
+        let mediaAlbum = normalizedIdentityComponent(album ?? "")
+        let stateAlbum = normalizedIdentityComponent(playbackState.album ?? "")
+        if !mediaAlbum.isEmpty, !stateAlbum.isEmpty, mediaAlbum != stateAlbum {
+            return false
+        }
+
+        return true
     }
 
     private func updateArtwork(_ data: Data?) {
         let trackChanged = artworkTrackTitle != currentTrackTitle
-        artworkTrackTitle = currentTrackTitle
 
-        var resolved = data
-        if resolved == nil {
-            // MediaRemote artwork is unavailable; ask Music directly, but
-            // only once per track since the AppleScript round trip is slow.
-            guard trackChanged else { return }
-            resolved = currentTrackTitle == "Not playing" ? nil : musicController.currentTrackArtwork()
+        if let data {
+            applyArtworkData(data, trackTitle: currentTrackTitle)
+            return
         }
 
-        guard resolved != lastArtworkData else { return }
-        lastArtworkData = resolved
-        artwork = resolved.flatMap { NSImage(data: $0) }
+        guard trackChanged else { return }
+        resetArtworkForTrack(currentTrackTitle)
+        scheduleMusicArtworkFetch(for: currentTrackTitle)
+    }
+
+    private func resetArtworkForTrack(_ title: String) {
+        artworkTrackTitle = title
+        lastArtworkData = nil
+        if title == "Not playing" || title == "Unavailable" {
+            artwork = nil
+        }
+    }
+
+    private func scheduleMusicArtworkFetch(for title: String, attempt: Int = 0) {
+        guard !title.isEmpty,
+              title != "Not playing",
+              title != "Unavailable" else {
+            return
+        }
+
+        artworkFetchGeneration += 1
+        let generation = artworkFetchGeneration
+        let delay: TimeInterval = attempt == 0 ? 0.25 : 0.8
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self,
+                  self.artworkFetchGeneration == generation,
+                  self.currentTrackTitle == title else {
+                return
+            }
+
+            self.artworkFetchQueue.async { [weak self] in
+                guard let self else { return }
+                let data = self.musicController.currentTrackArtwork()
+                DispatchQueue.main.async {
+                    guard self.artworkFetchGeneration == generation,
+                          self.currentTrackTitle == title else {
+                        return
+                    }
+
+                    if let data, !data.isEmpty {
+                        self.applyArtworkData(data, trackTitle: title)
+                    } else if attempt < 2 {
+                        self.scheduleMusicArtworkFetch(for: title, attempt: attempt + 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func applyArtworkData(_ data: Data, trackTitle: String) {
+        let sameData = data == lastArtworkData
+        artworkTrackTitle = trackTitle
+        guard !sameData else { return }
+        lastArtworkData = data
+        artwork = NSImage(data: data)
     }
 
     func formatSampleRate(_ sampleRate: Double?) -> String {
@@ -526,7 +837,7 @@ final class SampleRateModel: ObservableObject {
 
     private func shouldDebounceStartupRate(_ rate: Double) -> Bool {
         guard !isPreemptivelyPaused,
-              let playbackStartTime,
+              let playbackStartTime = playbackState.playbackStartTime,
               let lastHandledRate,
               abs(lastHandledRate - rate) >= 1.0,
               Date().timeIntervalSince(playbackStartTime) < 2.0 else {
@@ -538,6 +849,7 @@ final class SampleRateModel: ObservableObject {
     private func resetLogLock(reason: String) {
         stableLogSampleRate = nil
         stableLogSampleRateAt = nil
+        stableSampleRateSourceDisplay = "Log (locked)"
         logRateWindow.removeAll()
         latestLogCandidateRate = nil
         hasLookaheadActivity = false
@@ -550,7 +862,7 @@ final class SampleRateModel: ObservableObject {
     private func updateCurrentSampleRateDisplay() {
         if let stableLogSampleRate {
             trackSampleRateDisplay = formatSampleRate(stableLogSampleRate)
-            sampleRateSourceDisplay = "Log (locked)"
+            sampleRateSourceDisplay = stableSampleRateSourceDisplay
         } else if latestLogCandidateRate != nil {
             trackSampleRateDisplay = "Estimating"
             sampleRateSourceDisplay = "Log (estimating)"
@@ -560,11 +872,32 @@ final class SampleRateModel: ObservableObject {
         }
     }
 
+    private func applyMediaRemoteSampleRate(_ sampleRate: Double?) {
+        guard stableLogSampleRate == nil,
+              let sampleRate,
+              let candidateRate = quantizeLogRate(sampleRate) else {
+            return
+        }
+
+        stableLogSampleRate = candidateRate
+        stableLogSampleRateAt = Date()
+        stableSampleRateSourceDisplay = "MediaRemote"
+        trackSampleRateDisplay = formatSampleRate(candidateRate)
+        sampleRateSourceDisplay = stableSampleRateSourceDisplay
+        logStatusMessage = "MediaRemote sample rate at \(formatSampleRate(candidateRate))"
+        lastHandledRate = candidateRate
+
+        if let currentAlbumID {
+            rememberAlbumRate(candidateRate, albumID: currentAlbumID)
+        }
+    }
+
     private func lockSampleRate(_ rate: Double, reason: String) {
         stableLogSampleRate = rate
         stableLogSampleRateAt = Date()
+        stableSampleRateSourceDisplay = "Log (locked)"
         trackSampleRateDisplay = formatSampleRate(rate)
-        sampleRateSourceDisplay = "Log (locked)"
+        sampleRateSourceDisplay = stableSampleRateSourceDisplay
         logStatusMessage = "\(reason) at \(formatSampleRate(rate))"
         if let currentAlbumID {
             rememberAlbumRate(rate, albumID: currentAlbumID)
@@ -606,14 +939,10 @@ final class SampleRateModel: ObservableObject {
 
         guard previousTrackID != nil, previousTrackID != trackID else {
             lastTrackID = trackID
-            if isPlaying, playbackStartTime == nil {
-                playbackStartTime = Date()
-            }
             return
         }
 
         lastTrackID = trackID
-        playbackStartTime = isPlaying ? Date() : nil
         let sameAlbum = !albumID.isEmpty && albumID == previousAlbumID
         handleTrackBoundary(albumID: albumID.isEmpty ? nil : albumID,
                             sameAlbum: sameAlbum,
@@ -630,8 +959,9 @@ final class SampleRateModel: ObservableObject {
         if let detectedPreBufferRate {
             self.detectedPreBufferRate = nil
             stableLogSampleRate = detectedPreBufferRate
+            stableSampleRateSourceDisplay = "Log (pre-buffer)"
             trackSampleRateDisplay = formatSampleRate(detectedPreBufferRate)
-            sampleRateSourceDisplay = "Log (pre-buffer)"
+            sampleRateSourceDisplay = stableSampleRateSourceDisplay
             if let albumID {
                 rememberAlbumRate(detectedPreBufferRate, albumID: albumID)
             }
@@ -643,8 +973,9 @@ final class SampleRateModel: ObservableObject {
 
         if let albumID, let cachedRate = albumRateCache[albumID] {
             stableLogSampleRate = cachedRate
+            stableSampleRateSourceDisplay = "Album cache"
             trackSampleRateDisplay = formatSampleRate(cachedRate)
-            sampleRateSourceDisplay = "Album cache"
+            sampleRateSourceDisplay = stableSampleRateSourceDisplay
 
             if sameAlbum {
                 statusMessage = "Same album cached at \(formatSampleRate(cachedRate)); not switching mid-album"
@@ -661,11 +992,9 @@ final class SampleRateModel: ObservableObject {
             return
         }
 
-        guard isPlaying, autoSwitchEnabled, isSafeTrackBoundary(position) else {
-            return
+        if isPlaying, autoSwitchEnabled, isSafeTrackBoundary(position) {
+            statusMessage = "Waiting for log sample rate"
         }
-
-        beginPreemptivePause()
     }
 
     private func beginPreemptivePause() {
@@ -722,7 +1051,6 @@ final class SampleRateModel: ObservableObject {
             return
         }
 
-        let pausedForSwitch = isPreemptivelyPaused || musicController.pauseIfPlaying()
         isSwitchingRate = true
         let switched = audioController.setDefaultOutputSampleRate(rate)
         isSwitchingRate = false
@@ -738,13 +1066,7 @@ final class SampleRateModel: ObservableObject {
             statusMessage = "Failed to switch output sample rate"
         }
 
-        if isPreemptivelyPaused {
-            finishPreemptivePauseIfNeeded()
-        } else if pausedForSwitch {
-            if musicController.resumeIfPaused() {
-                verifyPlaybackResumed()
-            }
-        }
+        finishPreemptivePauseIfNeeded()
     }
 
     private func isSafeTrackBoundary(_ position: Double?) -> Bool {

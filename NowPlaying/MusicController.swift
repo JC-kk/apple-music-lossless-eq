@@ -1,18 +1,6 @@
 import Foundation
-
-struct TrackInfo {
-    let title: String
-    let artist: String?
-    let album: String?
-    let isPlaying: Bool
-    let position: Double?
-    let duration: Double?
-}
-
-struct TrackFetchResult {
-    let track: TrackInfo?
-    let errorMessage: String?
-}
+import AppKit
+import ScriptingBridge
 
 struct MusicPlayerInfo {
     let title: String?
@@ -21,6 +9,7 @@ struct MusicPlayerInfo {
     let albumArtist: String?
     let state: String?
     let position: Double?
+    let duration: Double?
 
     var isPlaying: Bool {
         state == "Playing"
@@ -37,6 +26,9 @@ struct MusicPlayerInfo {
         albumArtist = MusicPlayerInfo.string(userInfo["Album Artist"])
         state = MusicPlayerInfo.string(userInfo["Player State"])
         position = MusicPlayerInfo.double(userInfo["Player Position"])
+        duration = MusicPlayerInfo.duration(userInfo["Total Time"])
+            ?? MusicPlayerInfo.duration(userInfo["Duration"])
+            ?? MusicPlayerInfo.duration(userInfo["Track Duration"])
     }
 
     private static func string(_ value: Any?) -> String? {
@@ -55,6 +47,16 @@ struct MusicPlayerInfo {
         }
         return nil
     }
+
+    private static func duration(_ value: Any?) -> Double? {
+        guard let value = double(value), value > 0 else {
+            return nil
+        }
+
+        // Music's distributed notification has historically used milliseconds
+        // for "Total Time", while MediaRemote reports seconds.
+        return value > 10_000 ? value / 1_000 : value
+    }
 }
 
 enum MusicCommand: String {
@@ -65,6 +67,10 @@ enum MusicCommand: String {
 
 final class MusicController {
     private let playerInfoNotification = Notification.Name("com.apple.Music.playerInfo")
+
+    var isRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty
+    }
 
     func observePlayerInfo(_ handler: @escaping (MusicPlayerInfo) -> Void) -> NSObjectProtocol {
         DistributedNotificationCenter.default().addObserver(forName: playerInfoNotification,
@@ -78,7 +84,22 @@ final class MusicController {
         DistributedNotificationCenter.default().removeObserver(observer)
     }
 
+    func playerPosition() -> Double? {
+        guard isRunning,
+              let music = SBApplication(bundleIdentifier: "com.apple.Music"),
+              let value = music.value(forKey: "playerPosition") as? NSNumber else {
+            return nil
+        }
+
+        let position = value.doubleValue
+        return position.isFinite && position >= 0 ? position : nil
+    }
+
     func sendCommand(_ command: MusicCommand) {
+        if sendFastCommand(command) {
+            return
+        }
+
         let scriptSource = """
         tell application \"Music\"
             if it is running then
@@ -162,24 +183,6 @@ final class MusicController {
         return state
     }
 
-    func playerPosition() -> Double? {
-        let scriptSource = """
-        tell application \"Music\"
-            if it is running then
-                try
-                    return (player position as text)
-                end try
-            end if
-        end tell
-        return \"\"
-        """
-
-        guard let value = executeString(scriptSource), !value.isEmpty else {
-            return nil
-        }
-        return numeric(value)
-    }
-
     func currentTrackArtwork() -> Data? {
         let scriptSource = """
         tell application \"Music\"
@@ -205,86 +208,6 @@ final class MusicController {
         return data.isEmpty ? nil : data
     }
 
-    func currentTrackInfo() -> TrackFetchResult {
-        // Note: "st" is a reserved abbreviation in AppleScript and cannot be
-        // used as a variable name.
-        let scriptSource = """
-        tell application \"Music\"
-            if it is running then
-                set stateText to (player state as text)
-                if stateText is \"playing\" or stateText is \"paused\" then
-                    set t to current track
-                    set trackName to name of t
-                    set artistName to \"\"
-                    set albumName to \"\"
-                    set posText to \"\"
-                    set durText to \"\"
-                    try
-                        set artistName to artist of t
-                    end try
-                    try
-                        set albumName to album of t
-                    end try
-                    try
-                        set posText to (player position as text)
-                    end try
-                    try
-                        set durText to ((duration of t) as text)
-                    end try
-                    return trackName & \"||\" & artistName & \"||\" & albumName & \"||\" & stateText & \"||\" & posText & \"||\" & durText
-                end if
-            end if
-        end tell
-        return ""
-        """
-
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return TrackFetchResult(track: nil, errorMessage: "Failed to create AppleScript.")
-        }
-
-        var errorInfo: NSDictionary?
-        let output = script.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            let errorCode = (errorInfo[NSAppleScript.errorNumber] as? Int) ?? 0
-            if errorCode == -1743 {
-                return TrackFetchResult(track: nil,
-                                        errorMessage: "Apple Music access denied. Enable it in System Settings > Privacy & Security > Automation.")
-            }
-
-            let message = (errorInfo[NSAppleScript.errorMessage] as? String) ?? "AppleScript error."
-            return TrackFetchResult(track: nil, errorMessage: message)
-        }
-
-        guard let outputString = output.stringValue,
-              !outputString.isEmpty else {
-            return TrackFetchResult(track: nil, errorMessage: nil)
-        }
-
-        let parts = outputString.components(separatedBy: "||")
-        guard let title = parts.first, !title.isEmpty else {
-            return TrackFetchResult(track: nil, errorMessage: nil)
-        }
-
-        let artist = parts.count > 1 ? nonEmpty(parts[1]) : nil
-        let album = parts.count > 2 ? nonEmpty(parts[2]) : nil
-        let isPlaying = parts.count > 3 && parts[3] == "playing"
-        let position = parts.count > 4 ? numeric(parts[4]) : nil
-        let duration = parts.count > 5 ? numeric(parts[5]) : nil
-
-        return TrackFetchResult(track: TrackInfo(title: title,
-                                                 artist: artist,
-                                                 album: album,
-                                                 isPlaying: isPlaying,
-                                                 position: position,
-                                                 duration: duration),
-                                errorMessage: nil)
-    }
-
-    private func nonEmpty(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
     private func executeString(_ source: String) -> String? {
         guard let script = NSAppleScript(source: source) else {
             return nil
@@ -298,10 +221,39 @@ final class MusicController {
         return output.stringValue
     }
 
-    private func numeric(_ value: String) -> Double? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        return Double(trimmed)
+    private func sendFastCommand(_ command: MusicCommand) -> Bool {
+        switch command {
+        case .playPause:
+            return sendMusicEvent(eventID: fourCharCode("PlPs"))
+        case .nextTrack:
+            return sendMusicEvent(eventID: fourCharCode("Next"))
+        case .previousTrack:
+            return sendMusicEvent(eventID: fourCharCode("Prev"))
+        }
+    }
+
+    private func sendMusicEvent(eventID: AEEventID) -> Bool {
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
+        guard !running.isEmpty else {
+            return false
+        }
+
+        let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.Music")
+        let event = NSAppleEventDescriptor.appleEvent(withEventClass: fourCharCode("hook"),
+                                                      eventID: eventID,
+                                                      targetDescriptor: target,
+                                                      returnID: AEReturnID(kAutoGenerateReturnID),
+                                                      transactionID: AETransactionID(kAnyTransactionID))
+        do {
+            _ = try event.sendEvent(options: [.noReply], timeout: 0.25)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func fourCharCode(_ value: String) -> FourCharCode {
+        value.utf8.reduce(FourCharCode(0)) { ($0 << 8) + FourCharCode($1) }
     }
 }
 
