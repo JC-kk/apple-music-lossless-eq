@@ -563,6 +563,11 @@ final class SampleRateModel: ObservableObject {
 
         updateCurrentSampleRateDisplay()
 
+        if isPreemptivelyPaused {
+            statusMessage = "Preemptive pause — waiting for sample rate"
+            return
+        }
+
         guard isPlaying else {
             statusMessage = "Paused"
             return
@@ -853,11 +858,15 @@ final class SampleRateModel: ObservableObject {
     }
 
     private func applyLogAutoSwitch(sampleRate: Double) {
-        guard autoSwitchEnabled else { return }
+        guard autoSwitchEnabled else {
+            finishPreemptivePauseIfNeeded()
+            return
+        }
 
         let outputDevice = audioController.defaultOutputDeviceInfo()
         guard let currentOutputRate = outputDevice.sampleRate,
               abs(currentOutputRate - sampleRate) >= 1.0 else {
+            finishPreemptivePauseIfNeeded()
             return
         }
 
@@ -934,7 +943,9 @@ final class SampleRateModel: ObservableObject {
         let dominance = totalWeight > 0 ? Double(dominantWeight) / Double(totalWeight) : 0.0
 
         if stableLogSampleRate == nil {
-            if dominantWeight >= 6 && dominance >= 0.7 {
+            if shouldLockInitialLogRate(dominantWeight: dominantWeight,
+                                        totalWeight: totalWeight,
+                                        dominance: dominance) {
                 lockSampleRate(dominantRate, reason: "Log locked")
             } else {
                 sampleRateSourceDisplay = "Log (estimating)"
@@ -951,6 +962,16 @@ final class SampleRateModel: ObservableObject {
         if message != nil, stableLogSampleRate == nil {
             logStatusMessage = "Log estimating \(formatSampleRate(dominantRate)) (\(dominantWeight)/\(totalWeight))"
         }
+    }
+
+    private func shouldLockInitialLogRate(dominantWeight: Int,
+                                          totalWeight: Int,
+                                          dominance: Double) -> Bool {
+        if dominantWeight >= 6 && dominance >= 0.7 {
+            return true
+        }
+
+        return totalWeight >= 4 && dominantWeight == totalWeight
     }
 
     private func isTrustedInputFormatMessage(_ message: String?) -> Bool {
@@ -1015,6 +1036,10 @@ final class SampleRateModel: ObservableObject {
         if let currentAlbumID {
             rememberAlbumRate(candidateRate, albumID: currentAlbumID)
         }
+
+        switchToRateIfSafe(candidateRate,
+                           reason: "MediaRemote",
+                           position: elapsedSeconds)
     }
 
     private func lockSampleRate(_ rate: Double, reason: String) {
@@ -1118,7 +1143,10 @@ final class SampleRateModel: ObservableObject {
         }
 
         if isPlaying, autoSwitchEnabled, isSafeTrackBoundary(position) {
-            statusMessage = playbackStatusWithoutLogRate()
+            beginPreemptivePause()
+            if !isPreemptivelyPaused {
+                statusMessage = playbackStatusWithoutLogRate()
+            }
         }
     }
 
@@ -1136,9 +1164,7 @@ final class SampleRateModel: ObservableObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.isPreemptivelyPaused else { return }
             self.isPreemptivelyPaused = false
-            if self.musicController.resumeIfPaused() {
-                self.verifyPlaybackResumed()
-            }
+            self.resumePlaybackAfterPreemptivePause(reason: "Preemptive pause timeout")
             self.statusMessage = "Preemptive pause timeout — continuing playback"
         }
         preemptivePauseWork = work
@@ -1150,9 +1176,7 @@ final class SampleRateModel: ObservableObject {
         preemptivePauseWork = nil
         guard isPreemptivelyPaused else { return }
         isPreemptivelyPaused = false
-        if musicController.resumeIfPaused() {
-            verifyPlaybackResumed()
-        }
+        resumePlaybackAfterPreemptivePause(reason: "Rate ready")
     }
 
     private func cancelPreemptivePause() {
@@ -1162,7 +1186,11 @@ final class SampleRateModel: ObservableObject {
     }
 
     private func switchToRateIfSafe(_ rate: Double, reason: String, position: Double?) {
-        guard autoSwitchEnabled, !isSwitchingRate else { return }
+        guard autoSwitchEnabled else {
+            finishPreemptivePauseIfNeeded()
+            return
+        }
+        guard !isSwitchingRate else { return }
         guard isSafeTrackBoundary(position) || isPreemptivelyPaused else {
             statusMessage = "Skipping rate matching — track already in progress"
             return
@@ -1199,10 +1227,23 @@ final class SampleRateModel: ObservableObject {
         return position <= safeSwitchWindow
     }
 
-    private func verifyPlaybackResumed() {
+    private func resumePlaybackAfterPreemptivePause(reason: String, attempt: Int = 1) {
+        let requested = musicController.resumePlayback()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self else { return }
-            self.statusMessage = "Playback resume requested"
+            if self.musicController.isPlayingNow() {
+                self.statusMessage = "\(reason): playback resumed"
+                return
+            }
+
+            if attempt < 3 {
+                self.statusMessage = "\(reason): retrying playback resume"
+                self.resumePlaybackAfterPreemptivePause(reason: reason, attempt: attempt + 1)
+            } else {
+                self.statusMessage = requested
+                    ? "\(reason): resume requested, still paused"
+                    : "\(reason): couldn't resume playback"
+            }
         }
     }
 

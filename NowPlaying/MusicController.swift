@@ -205,6 +205,26 @@ final class MusicController {
         return executeString(scriptSource) == "playing"
     }
 
+    func resumePlayback() -> Bool {
+        let scriptSource = """
+        tell application \"Music\"
+            if it is running then
+                if (player state as text) is not \"playing\" then
+                    play
+                end if
+                return (player state as text)
+            end if
+        end tell
+        return \"\"
+        """
+
+        return executeString(scriptSource)?.lowercased() == "playing"
+    }
+
+    func isPlayingNow() -> Bool {
+        playerState() == "playing"
+    }
+
     func playerState() -> String? {
         let scriptSource = """
         tell application \"Music\"
