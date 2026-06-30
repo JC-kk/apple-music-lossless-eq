@@ -14,6 +14,49 @@ struct TrackFetchResult {
     let errorMessage: String?
 }
 
+struct MusicPlayerInfo {
+    let title: String?
+    let artist: String?
+    let album: String?
+    let albumArtist: String?
+    let state: String?
+    let position: Double?
+
+    var isPlaying: Bool {
+        state == "Playing"
+    }
+
+    var hasTrackMetadata: Bool {
+        !(title ?? "").isEmpty
+    }
+
+    init(userInfo: [AnyHashable: Any]) {
+        title = MusicPlayerInfo.string(userInfo["Name"])
+        artist = MusicPlayerInfo.string(userInfo["Artist"])
+        album = MusicPlayerInfo.string(userInfo["Album"])
+        albumArtist = MusicPlayerInfo.string(userInfo["Album Artist"])
+        state = MusicPlayerInfo.string(userInfo["Player State"])
+        position = MusicPlayerInfo.double(userInfo["Player Position"])
+    }
+
+    private static func string(_ value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func double(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber {
+            return number.doubleValue
+        }
+        if let string = value as? String {
+            return Double(string.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ",", with: "."))
+        }
+        return nil
+    }
+}
+
 enum MusicCommand: String {
     case playPause = "playpause"
     case nextTrack = "next track"
@@ -21,6 +64,20 @@ enum MusicCommand: String {
 }
 
 final class MusicController {
+    private let playerInfoNotification = Notification.Name("com.apple.Music.playerInfo")
+
+    func observePlayerInfo(_ handler: @escaping (MusicPlayerInfo) -> Void) -> NSObjectProtocol {
+        DistributedNotificationCenter.default().addObserver(forName: playerInfoNotification,
+                                                            object: nil,
+                                                            queue: .main) { notification in
+            handler(MusicPlayerInfo(userInfo: notification.userInfo ?? [:]))
+        }
+    }
+
+    func removePlayerInfoObserver(_ observer: NSObjectProtocol) {
+        DistributedNotificationCenter.default().removeObserver(observer)
+    }
+
     func sendCommand(_ command: MusicCommand) {
         let scriptSource = """
         tell application \"Music\"
@@ -36,6 +93,91 @@ final class MusicController {
 
         var errorInfo: NSDictionary?
         script.executeAndReturnError(&errorInfo)
+    }
+
+    func pauseIfPlaying() -> Bool {
+        guard playerState() == "playing" else {
+            return false
+        }
+
+        if sendMusicEvent(eventID: fourCharCode("Paus")) {
+            return true
+        }
+
+        let scriptSource = """
+        tell application \"Music\"
+            if it is running then
+                set stateText to (player state as text)
+                if stateText is \"playing\" then
+                    pause
+                    return \"paused\"
+                end if
+            end if
+        end tell
+        return \"\"
+        """
+
+        return executeString(scriptSource) == "paused"
+    }
+
+    func resumeIfPaused() -> Bool {
+        guard playerState() == "paused" else {
+            return false
+        }
+
+        if sendMusicEvent(eventID: fourCharCode("PlPs")) {
+            return true
+        }
+
+        let scriptSource = """
+        tell application \"Music\"
+            if it is running then
+                set stateText to (player state as text)
+                if stateText is \"paused\" then
+                    playpause
+                    return \"playing\"
+                end if
+            end if
+        end tell
+        return \"\"
+        """
+
+        return executeString(scriptSource) == "playing"
+    }
+
+    func playerState() -> String? {
+        let scriptSource = """
+        tell application \"Music\"
+            if it is running then
+                return (player state as text)
+            end if
+        end tell
+        return \"\"
+        """
+
+        guard let state = executeString(scriptSource)?.lowercased(),
+              !state.isEmpty else {
+            return nil
+        }
+        return state
+    }
+
+    func playerPosition() -> Double? {
+        let scriptSource = """
+        tell application \"Music\"
+            if it is running then
+                try
+                    return (player position as text)
+                end try
+            end if
+        end tell
+        return \"\"
+        """
+
+        guard let value = executeString(scriptSource), !value.isEmpty else {
+            return nil
+        }
+        return numeric(value)
     }
 
     func currentTrackArtwork() -> Data? {
@@ -143,9 +285,183 @@ final class MusicController {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func executeString(_ source: String) -> String? {
+        guard let script = NSAppleScript(source: source) else {
+            return nil
+        }
+
+        var errorInfo: NSDictionary?
+        let output = script.executeAndReturnError(&errorInfo)
+        guard errorInfo == nil else {
+            return nil
+        }
+        return output.stringValue
+    }
+
     private func numeric(_ value: String) -> Double? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: ",", with: ".")
         return Double(trimmed)
+    }
+}
+
+enum MusicSettingsAdvisor {
+    private static let musicDomain = "com.apple.Music"
+
+    static func warnings() -> [String] {
+        guard let domain = UserDefaults.standard.persistentDomain(forName: musicDomain) else {
+            return []
+        }
+
+        var warnings: [String] = []
+
+        if let losslessEnabled = firstBool(in: domain, keys: ["losslessAudioEnabled", "losslessEnabled"]),
+           !losslessEnabled {
+            warnings.append("Lossless Audio is disabled")
+        }
+
+        if let streamingQuality = firstInt(in: domain,
+                                           keys: ["streamingBitrate",
+                                                  "streamingQuality",
+                                                  "preferredStreamingBitrate",
+                                                  "streamingBitrateWifi"]),
+           streamingQuality < 3 {
+            warnings.append("Streaming quality is not Hi-Res Lossless")
+        }
+
+        if let downloadQuality = firstInt(in: domain,
+                                          keys: ["preferredDownloadBitrate",
+                                                 "downloadBitrate",
+                                                 "downloadQuality"]),
+           downloadQuality < 3 {
+            warnings.append("Download quality is not Hi-Res Lossless")
+        }
+
+        let mutatingPlaybackKeys = [
+            "optimizeSongVolume",
+            "iTunesSoundCheck",
+            "soundCheckEnabled",
+            "soundEnhancerEnabled",
+            "TransitionsEnabled",
+            "crossfadeEnabled",
+            "equalizerEnabled"
+        ]
+        for key in mutatingPlaybackKeys where boolValue(domain[key]) == true {
+            warnings.append(playbackWarningName(for: key))
+        }
+
+        if let amount = numberValue(domain["soundEnhancerAmount"]), amount > 0 {
+            warnings.append("Sound Enhancer is enabled")
+        }
+
+        return Array(NSOrderedSet(array: warnings)) as? [String] ?? warnings
+    }
+
+    static func applyRecommendedSettings() -> Bool {
+        quitMusicIfRunning()
+
+        var success = true
+        for key in ["losslessAudioEnabled", "losslessEnabled"] {
+            success = writeDefault(key: key, type: "-bool", value: "true") && success
+        }
+
+        for key in ["streamingBitrate",
+                    "streamingQuality",
+                    "preferredStreamingBitrate",
+                    "streamingBitrateWifi",
+                    "preferredDownloadBitrate",
+                    "downloadBitrate",
+                    "downloadQuality"] {
+            success = writeDefault(key: key, type: "-int", value: "3") && success
+        }
+
+        for key in ["optimizeSongVolume",
+                    "iTunesSoundCheck",
+                    "soundCheckEnabled",
+                    "soundEnhancerEnabled",
+                    "TransitionsEnabled",
+                    "crossfadeEnabled",
+                    "equalizerEnabled"] {
+            success = writeDefault(key: key, type: "-bool", value: "false") && success
+        }
+
+        success = writeDefault(key: "soundEnhancerAmount", type: "-int", value: "0") && success
+        return success
+    }
+
+    private static func firstBool(in domain: [String: Any], keys: [String]) -> Bool? {
+        for key in keys {
+            if let value = boolValue(domain[key]) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func firstInt(in domain: [String: Any], keys: [String]) -> Int? {
+        for key in keys {
+            if let value = numberValue(domain[key]) {
+                return Int(value)
+            }
+        }
+        return nil
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber { return value.boolValue }
+        if let value = value as? String {
+            let lower = value.lowercased()
+            if ["true", "yes", "1"].contains(lower) { return true }
+            if ["false", "no", "0"].contains(lower) { return false }
+        }
+        return nil
+    }
+
+    private static func numberValue(_ value: Any?) -> Double? {
+        if let value = value as? NSNumber { return value.doubleValue }
+        if let value = value as? Double { return value }
+        if let value = value as? Int { return Double(value) }
+        if let value = value as? String { return Double(value) }
+        return nil
+    }
+
+    private static func playbackWarningName(for key: String) -> String {
+        switch key {
+        case "equalizerEnabled":
+            return "Music Equalizer is enabled"
+        case "TransitionsEnabled", "crossfadeEnabled":
+            return "Song Transitions are enabled"
+        case "optimizeSongVolume", "iTunesSoundCheck", "soundCheckEnabled":
+            return "Sound Check is enabled"
+        case "soundEnhancerEnabled":
+            return "Sound Enhancer is enabled"
+        default:
+            return "\(key) is enabled"
+        }
+    }
+
+    private static func quitMusicIfRunning() {
+        let source = """
+        tell application \"Music\"
+            if it is running then quit
+        end tell
+        """
+        var errorInfo: NSDictionary?
+        NSAppleScript(source: source)?.executeAndReturnError(&errorInfo)
+    }
+
+    private static func writeDefault(key: String, type: String, value: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
+        process.arguments = ["write", musicDomain, key, type, value]
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 }

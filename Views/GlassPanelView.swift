@@ -185,6 +185,8 @@ struct GlassPanelView: View {
                 Divider()
                 Button("Refresh now") { model.refreshNow() }
                 Button("Restart log parser") { model.restartLogParser() }
+                Button("Check Music settings") { model.refreshMusicSettingsWarnings() }
+                Button("Fix Music settings") { model.fixMusicSettings() }
                 Button("Dump recent logs") { model.dumpRecentLogs() }
                 Button("Dump now playing") { model.dumpNowPlaying() }
                 Divider()
@@ -543,13 +545,16 @@ struct GlassPanelView: View {
 
     @ViewBuilder
     private var statusFooter: some View {
-        if !model.statusMessage.isEmpty || !model.logStatusMessage.isEmpty {
+        if !model.statusMessage.isEmpty || !model.logStatusMessage.isEmpty || !model.musicSettingsWarnings.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 if !model.statusMessage.isEmpty {
                     Text(model.statusMessage)
                 }
                 if !model.logStatusMessage.isEmpty {
                     Text(model.logStatusMessage)
+                }
+                if !model.musicSettingsWarnings.isEmpty {
+                    Text("Music settings: \(model.musicSettingsWarnings.prefix(2).joined(separator: ", "))")
                 }
             }
             .font(.caption2)

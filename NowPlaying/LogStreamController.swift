@@ -14,9 +14,10 @@ final class LogStreamController {
     private var lastDurationTimestamp: Date?
 
     var onSampleRate: ((Double, String?) -> Void)?
+    var onTrackName: ((String) -> Void)?
     var onStatus: ((String) -> Void)?
 
-    var predicate: String = "(process == \"Music\" OR subsystem CONTAINS[c] \"com.apple.Music\" OR subsystem CONTAINS[c] \"com.apple.mediaremoted\") AND (eventMessage CONTAINS[c] \"sample\" OR eventMessage CONTAINS[c] \"lossless\" OR eventMessage CONTAINS[c] \"hi-res\" OR eventMessage CONTAINS[c] \"kHz\" OR eventMessage CONTAINS[c] \"Hz\" OR eventMessage CONTAINS[c] \"audio\" OR eventMessage CONTAINS[c] \"format\")"
+    var predicate: String = "eventMessage CONTAINS[c] \"Input format:\" OR eventMessage CONTAINS[c] \"ITMPAVItemCount INIT\" OR eventMessage CONTAINS[c] \"sample rate\" OR eventMessage CONTAINS[c] \"samplerate\" OR eventMessage CONTAINS[c] \"kHz\""
     var logLevel: String = "debug"
 
     func start() {
@@ -26,7 +27,8 @@ final class LogStreamController {
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/log")
         proc.arguments = [
             "stream",
-            "--style", "json",
+            "--process", "Music",
+            "--style", "compact",
             "--level", logLevel,
             "--predicate", predicate
         ]
@@ -117,6 +119,10 @@ final class LogStreamController {
 
     @discardableResult
     private func processMessage(_ message: String) -> Bool {
+        if let trackName = SampleRateParser.extractLookaheadTrackName(from: message) {
+            onTrackName?(trackName)
+        }
+
         if let rate = SampleRateParser.extractSampleRate(from: message) {
             onSampleRate?(rate, message)
             return true
@@ -191,6 +197,9 @@ final class LogStreamController {
 }
 
 private enum SampleRateParser {
+    private static let inputFormatMarker = "Input format:"
+    private static let lookaheadMarker = "ITMPAVItemCount INIT"
+
     private static let sampleRatePattern = try! NSRegularExpression(
         pattern: "(?i)(?:sample\\s*rate|samplerate)\\s*[:=]\\s*([0-9]+(?:\\.[0-9]+)?)",
         options: []
@@ -217,6 +226,10 @@ private enum SampleRateParser {
     )
 
     static func extractSampleRate(from message: String) -> Double? {
+        if let value = extractInputFormatRate(from: message) {
+            return value
+        }
+
         if let value = firstMatch(message, regex: sampleRatePattern) {
             return normalize(value, unit: nil)
         }
@@ -232,6 +245,24 @@ private enum SampleRateParser {
         return nil
     }
 
+    static func extractLookaheadTrackName(from message: String) -> String? {
+        guard let markerRange = message.range(of: lookaheadMarker) else {
+            return nil
+        }
+
+        let tail = message[markerRange.upperBound...]
+        guard let separator = tail.range(of: "\") ") else {
+            return nil
+        }
+
+        var title = String(tail[separator.upperBound...])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if title.last == "'" {
+            title.removeLast()
+        }
+        return title.isEmpty ? nil : title
+    }
+
     static func extractFrameCount(from message: String) -> Int? {
         guard let value = firstMatch(message, regex: framesPattern) else {
             return nil
@@ -245,8 +276,7 @@ private enum SampleRateParser {
 
     static func extractSampleRate(from json: [String: Any]) -> Double? {
         for (key, value) in json {
-            if let keyString = key as? String,
-               keyString.lowercased().contains("samplerate"),
+            if isSampleRateKey(key),
                let numeric = numericValue(value) {
                 return normalize(numeric, unit: nil)
             }
@@ -274,11 +304,43 @@ private enum SampleRateParser {
             }
         }
 
-        if let number = numericValue(value) {
-            return normalize(number, unit: nil)
+        return nil
+    }
+
+    private static func extractInputFormatRate(from message: String) -> Double? {
+        guard message.range(of: inputFormatMarker, options: .caseInsensitive) != nil,
+              let channelsRange = message.range(of: "ch,", options: .caseInsensitive),
+              let hzRange = message[channelsRange.upperBound...].range(of: "Hz", options: .caseInsensitive) else {
+            return nil
         }
 
-        return nil
+        let candidate = message[channelsRange.upperBound..<hzRange.lowerBound]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let rawRate = Double(candidate),
+              (8000...768000).contains(rawRate) else {
+            return nil
+        }
+
+        return normalizeApproximateLogRate(rawRate)
+    }
+
+    private static func normalizeApproximateLogRate(_ rate: Double) -> Double {
+        let approximations: [(Double, Double)] = [
+            (44000, 44100),
+            (88000, 88200),
+            (176000, 176400),
+            (352000, 352800),
+            (705000, 705600)
+        ]
+        for (logged, canonical) in approximations where abs(rate - logged) <= 20 {
+            return canonical
+        }
+        return rate
+    }
+
+    private static func isSampleRateKey(_ key: String) -> Bool {
+        let lower = key.lowercased()
+        return lower.contains("samplerate") || (lower.contains("sample") && lower.contains("rate"))
     }
 
     private static func firstMatch(_ text: String, regex: NSRegularExpression) -> Double? {
