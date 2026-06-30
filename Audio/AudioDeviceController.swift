@@ -280,9 +280,20 @@ final class AudioDeviceController {
         }
 
         var rate = targetRate
-        var size = UInt32(MemoryLayout<Double>.size)
+        let size = UInt32(MemoryLayout<Double>.size)
         let setStatus = AudioObjectSetPropertyData(deviceID, &address, 0, nil, size, &rate)
-        return setStatus == noErr
+        guard setStatus == noErr else {
+            return false
+        }
+
+        let lockedQuickly = waitForSampleRateLock(targetRate,
+                                                  deviceID: deviceID,
+                                                  timeout: 0.25,
+                                                  requiredStableReadings: 2)
+        if !lockedQuickly {
+            verifySampleRateLockInBackground(targetRate, deviceID: deviceID)
+        }
+        return true
     }
 
     private func defaultOutputDeviceID() -> AudioDeviceID? {
@@ -324,13 +335,14 @@ final class AudioDeviceController {
             return nil
         }
 
-        var cfString: CFString?
+        var cfString: Unmanaged<CFString>?
+        size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         let status = AudioObjectGetPropertyData(objectID, &address, 0, nil, &size, &cfString)
-        guard status == noErr else {
+        guard status == noErr, let cfString else {
             return nil
         }
 
-        return cfString as String?
+        return cfString.takeRetainedValue() as String
     }
 
     private func uint32Property(objectID: AudioObjectID,
@@ -375,6 +387,65 @@ final class AudioDeviceController {
         }
 
         return value
+    }
+
+    @discardableResult
+    private func waitForSampleRateLock(_ targetRate: Double,
+                                       deviceID: AudioDeviceID,
+                                       timeout: TimeInterval = 3.0,
+                                       requiredStableReadings: Int = 5) -> Bool {
+        let tolerance = 2.0
+        let interval: TimeInterval = 0.05
+        let deadline = Date().addingTimeInterval(timeout)
+        var stableReadings = 0
+
+        while Date() < deadline {
+            if let actualRate = actualOrNominalSampleRate(deviceID: deviceID),
+               abs(actualRate - targetRate) <= tolerance {
+                stableReadings += 1
+                if stableReadings >= requiredStableReadings {
+                    return true
+                }
+            } else {
+                stableReadings = 0
+            }
+            Thread.sleep(forTimeInterval: interval)
+        }
+
+        return false
+    }
+
+    private func verifySampleRateLockInBackground(_ targetRate: Double,
+                                                  deviceID: AudioDeviceID) {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            _ = self?.waitForSampleRateLock(targetRate,
+                                            deviceID: deviceID,
+                                            timeout: 3.0,
+                                            requiredStableReadings: 5)
+        }
+    }
+
+    private func actualOrNominalSampleRate(deviceID: AudioDeviceID) -> Double? {
+        if let actual = doublePropertyIfPresent(objectID: deviceID,
+                                                selector: kAudioDevicePropertyActualSampleRate) {
+            return actual
+        }
+        return doubleProperty(objectID: deviceID,
+                              selector: kAudioDevicePropertyNominalSampleRate)
+    }
+
+    private func doublePropertyIfPresent(objectID: AudioObjectID,
+                                         selector: AudioObjectPropertySelector) -> Double? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        guard AudioObjectHasProperty(objectID, &address) else {
+            return nil
+        }
+        return doubleProperty(objectID: objectID, selector: selector)
     }
 
     private func nearestSupportedSampleRate(_ desired: Double,
