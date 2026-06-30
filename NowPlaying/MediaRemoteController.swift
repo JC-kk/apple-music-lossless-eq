@@ -7,6 +7,7 @@ struct NowPlayingInfo {
     let artist: String?
     let album: String?
     let artworkData: Data?
+    let artworkURL: URL?
     let sampleRate: Double?
     let isPlaying: Bool
     let elapsed: Double?
@@ -72,7 +73,8 @@ final class MediaRemoteController {
             let sampleRate = MediaRemoteController.extractSampleRate(from: dict)
             let artist = dict["kMRMediaRemoteNowPlayingInfoArtist"] as? String
             let album = dict["kMRMediaRemoteNowPlayingInfoAlbum"] as? String
-            let artworkData = dict["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data
+            let artworkData = MediaRemoteController.extractArtworkData(from: dict)
+            let artworkURL = MediaRemoteController.extractArtworkURL(from: dict)
             let duration = (dict["kMRMediaRemoteNowPlayingInfoDuration"] as? NSNumber)?.doubleValue
             let elapsed = (dict["kMRMediaRemoteNowPlayingInfoElapsedTime"] as? NSNumber)?.doubleValue
             let timestamp = dict["kMRMediaRemoteNowPlayingInfoTimestamp"] as? Date
@@ -81,6 +83,7 @@ final class MediaRemoteController {
                                            artist: artist,
                                            album: album,
                                            artworkData: artworkData,
+                                           artworkURL: artworkURL,
                                            sampleRate: sampleRate,
                                            isPlaying: isPlaying,
                                            elapsed: elapsed,
@@ -123,6 +126,64 @@ final class MediaRemoteController {
 
         if let known = findNumber(in: dict, keyContains: "samplerate") {
             return known
+        }
+
+        return nil
+    }
+
+    private static func extractArtworkData(from value: Any) -> Data? {
+        if let data = value as? Data, !data.isEmpty {
+            return data
+        }
+
+        if let data = value as? NSData, data.length > 0 {
+            return data as Data
+        }
+
+        if let dict = value as? NSDictionary {
+            if let data = dict["kMRMediaRemoteNowPlayingInfoArtworkData"] as? Data, !data.isEmpty {
+                return data
+            }
+
+            for (key, val) in dict {
+                let keyString = String(describing: key).lowercased()
+                if keyString.contains("artwork") || keyString.contains("image") || keyString.contains("cover") {
+                    if let data = extractArtworkData(from: val) {
+                        return data
+                    }
+                }
+            }
+        } else if let array = value as? [Any] {
+            for item in array {
+                if let data = extractArtworkData(from: item) {
+                    return data
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private static func extractArtworkURL(from dict: NSDictionary) -> URL? {
+        let keys = [
+            "kMRMediaRemoteNowPlayingInfoArtworkIdentifier",
+            "kMRMediaRemoteNowPlayingInfoArtworkURL",
+            "artworkURL",
+            "artworkIdentifier"
+        ]
+
+        for key in keys {
+            if let value = dict[key] as? String,
+               let url = URL(string: value),
+               url.scheme?.hasPrefix("http") == true {
+                return url
+            }
+        }
+
+        if let urlString = findString(in: dict, keyContains: "artwork"),
+           let url = URL(string: urlString),
+           url.scheme?.hasPrefix("http") == true {
+            return url
         }
 
         return nil

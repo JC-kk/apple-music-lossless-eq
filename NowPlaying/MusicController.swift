@@ -31,6 +31,22 @@ struct MusicPlayerInfo {
             ?? MusicPlayerInfo.duration(userInfo["Track Duration"])
     }
 
+    init(title: String?,
+         artist: String?,
+         album: String?,
+         albumArtist: String?,
+         state: String?,
+         position: Double?,
+         duration: Double?) {
+        self.title = MusicPlayerInfo.string(title)
+        self.artist = MusicPlayerInfo.string(artist)
+        self.album = MusicPlayerInfo.string(album)
+        self.albumArtist = MusicPlayerInfo.string(albumArtist)
+        self.state = MusicPlayerInfo.string(state)
+        self.position = position
+        self.duration = duration
+    }
+
     private static func string(_ value: Any?) -> String? {
         guard let string = value as? String else { return nil }
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,6 +109,29 @@ final class MusicController {
 
         let position = value.doubleValue
         return position.isFinite && position >= 0 ? position : nil
+    }
+
+    func currentPlayerInfo() -> MusicPlayerInfo? {
+        guard isRunning,
+              let music = SBApplication(bundleIdentifier: "com.apple.Music"),
+              let track = music.value(forKey: "currentTrack") as? NSObject else {
+            return nil
+        }
+
+        let title = track.value(forKey: "name") as? String
+        guard !(title ?? "").isEmpty else {
+            return nil
+        }
+
+        let state = playerStateName(from: music.value(forKey: "playerState"))
+        let duration = numericValue(track.value(forKey: "duration"))
+        return MusicPlayerInfo(title: title,
+                               artist: track.value(forKey: "artist") as? String,
+                               album: track.value(forKey: "album") as? String,
+                               albumArtist: track.value(forKey: "albumArtist") as? String,
+                               state: state,
+                               position: playerPosition(),
+                               duration: duration)
     }
 
     func sendCommand(_ command: MusicCommand) {
@@ -219,6 +258,36 @@ final class MusicController {
             return nil
         }
         return output.stringValue
+    }
+
+    private func numericValue(_ value: Any?) -> Double? {
+        if let number = value as? NSNumber {
+            let doubleValue = number.doubleValue
+            return doubleValue.isFinite && doubleValue > 0 ? doubleValue : nil
+        }
+
+        if let doubleValue = value as? Double, doubleValue.isFinite, doubleValue > 0 {
+            return doubleValue
+        }
+
+        return nil
+    }
+
+    private func playerStateName(from value: Any?) -> String? {
+        guard let number = value as? NSNumber else {
+            return nil
+        }
+
+        switch FourCharCode(number.uint32Value) {
+        case fourCharCode("kPSP"):
+            return "Playing"
+        case fourCharCode("kPSp"):
+            return "Paused"
+        case fourCharCode("kPSS"):
+            return "Stopped"
+        default:
+            return nil
+        }
     }
 
     private func sendFastCommand(_ command: MusicCommand) -> Bool {

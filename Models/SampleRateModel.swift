@@ -138,6 +138,16 @@ private struct PlaybackStateMachine {
         }
     }
 
+    mutating func applyTransport(_ info: MusicPlayerInfo, now: Date) {
+        duration = info.duration ?? duration
+        mode = info.isPlaying ? .playing : .paused
+        if let position = info.position {
+            applyExternalPosition(position, now: now)
+        }
+
+        playbackStartTime = info.isPlaying ? (playbackStartTime ?? now) : nil
+    }
+
     mutating func stop() {
         mode = .stopped
         trackID = nil
@@ -217,6 +227,8 @@ final class SampleRateModel: ObservableObject {
     private let audioController = AudioDeviceController()
     private let artworkFetchQueue = DispatchQueue(label: "Choritsu.music-artwork")
     private let positionFetchQueue = DispatchQueue(label: "Choritsu.music-position")
+    private let musicSnapshotQueue = DispatchQueue(label: "Choritsu.music-snapshot")
+    private let artworkDownloadSession = URLSession(configuration: .ephemeral)
     private var timer: Timer?
     private var playbackState = PlaybackStateMachine()
     private var latestLogCandidateRate: Double?
@@ -239,8 +251,13 @@ final class SampleRateModel: ObservableObject {
     private var lastAppliedAt: Date?
     private var lastArtworkData: Data?
     private var artworkTrackTitle: String?
+    private var lastArtworkURL: URL?
+    private var lastMediaRemoteTrackID: String?
+    private var lastMediaRemoteTrackAt: Date?
+    private var lastMediaRemoteHadArtwork = false
     private var artworkFetchGeneration = 0
     private var isFetchingMusicPosition = false
+    private var isFetchingMusicSnapshot = false
     private var isAdjustingVolume = false
     private var isSwitchingRate = false
     private var isPreemptivelyPaused = false
@@ -393,6 +410,12 @@ final class SampleRateModel: ObservableObject {
     }
 
     private func handlePlayerInfo(_ info: MusicPlayerInfo) {
+        applyMusicPlayerInfo(info, allowArtworkFallback: true, scheduleRefresh: true)
+    }
+
+    private func applyMusicPlayerInfo(_ info: MusicPlayerInfo,
+                                      allowArtworkFallback: Bool,
+                                      scheduleRefresh: Bool) {
         guard info.hasTrackMetadata, let title = info.title else {
             if info.state == "Stopped" || info.state == "Unknown" {
                 notificationTrackName = nil
@@ -410,12 +433,23 @@ final class SampleRateModel: ObservableObject {
         notificationTrackName = title
         let now = Date()
         lastPlayerInfoAt = now
+        if shouldPreferRecentMediaRemote(overMusicTrackID: notificationID) {
+            playbackState.applyTransport(info, now: now)
+            publishPlaybackState(now: now)
+            if scheduleRefresh {
+                scheduleQuickRefresh()
+            }
+            return
+        }
+
         let trackChanged = playbackState.applyPlayerInfo(info, trackID: notificationID, now: now)
         publishPlaybackState(now: now)
         if trackChanged {
             resetArtworkForTrack(title)
         }
-        scheduleMusicArtworkFetch(for: title)
+        if allowArtworkFallback, (trackChanged || artwork == nil) {
+            scheduleMusicArtworkFetch(for: title)
+        }
 
         updateTrackIdentity(title: title,
                             artist: info.artist,
@@ -423,7 +457,9 @@ final class SampleRateModel: ObservableObject {
                             albumArtist: info.albumArtist,
                             isPlaying: info.isPlaying,
                             position: playbackState.projectedPosition(now: now))
-        scheduleQuickRefresh()
+        if scheduleRefresh {
+            scheduleQuickRefresh()
+        }
     }
 
     private func updateState() {
@@ -431,6 +467,7 @@ final class SampleRateModel: ObservableObject {
 
         playbackState.project()
         publishPlaybackState()
+        scheduleMusicSnapshotSync()
         scheduleMusicPositionSync()
 
         outputDeviceName = outputDevice.name
@@ -476,10 +513,11 @@ final class SampleRateModel: ObservableObject {
         let resolvedTitle = info?.title ?? ""
 
         if shouldPreservePlayerInfoState(for: resolvedTitle) {
+            updateArtwork(info?.artworkData, artworkURL: info?.artworkURL)
             playbackState.project()
             publishPlaybackState()
             updateCurrentSampleRateDisplay()
-            statusMessage = isPlaying ? "Waiting for log sample rate" : "Paused"
+            statusMessage = isPlaying ? playbackStatusWithoutLogRate() : "Paused"
             return
         }
 
@@ -497,6 +535,8 @@ final class SampleRateModel: ObservableObject {
 
         if let info {
             let mediaRemoteTrackID = identityKey([resolvedTitle, resolvedArtist, resolvedAlbum])
+            rememberMediaRemoteTrack(mediaRemoteTrackID,
+                                     hasArtwork: info.artworkData != nil || info.artworkURL != nil)
             let trustMediaRemotePlayback = lastPlayerInfoAt == nil || !musicController.isRunning
             if trustMediaRemotePlayback {
                 _ = playbackState.applyMediaRemote(info,
@@ -519,7 +559,7 @@ final class SampleRateModel: ObservableObject {
                             albumArtist: resolvedArtist,
                             isPlaying: isPlaying,
                             position: elapsedSeconds)
-        updateArtwork(info?.artworkData)
+        updateArtwork(info?.artworkData, artworkURL: info?.artworkURL)
 
         updateCurrentSampleRateDisplay()
 
@@ -534,7 +574,7 @@ final class SampleRateModel: ObservableObject {
         }
 
         guard let targetSampleRate = stableLogSampleRate else {
-            statusMessage = logParserEnabled ? "Waiting for log sample rate" : "Playing"
+            statusMessage = playbackStatusWithoutLogRate()
             return
         }
 
@@ -587,10 +627,62 @@ final class SampleRateModel: ObservableObject {
         }
     }
 
+    private func scheduleMusicSnapshotSync() {
+        guard musicController.isRunning,
+              !isFetchingMusicSnapshot else {
+            return
+        }
+
+        isFetchingMusicSnapshot = true
+        musicSnapshotQueue.async { [weak self] in
+            guard let self else { return }
+            let info = self.musicController.currentPlayerInfo()
+            DispatchQueue.main.async {
+                self.isFetchingMusicSnapshot = false
+                guard let info else {
+                    return
+                }
+                self.applyMusicPlayerInfo(info,
+                                          allowArtworkFallback: self.artwork == nil,
+                                          scheduleRefresh: false)
+            }
+        }
+    }
+
+    private func playbackStatusWithoutLogRate() -> String {
+        if let outputSampleRate {
+            return "Playing at \(formatSampleRate(outputSampleRate))"
+        }
+
+        return "Playing"
+    }
+
     private func shouldPreservePlayerInfoState(for mediaRemoteTitle: String) -> Bool {
         guard mediaRemoteTitle.isEmpty || mediaRemoteTitle == "Unknown",
               notificationTrackName != nil,
               musicController.isRunning else {
+            return false
+        }
+
+        return true
+    }
+
+    private func rememberMediaRemoteTrack(_ trackID: String, hasArtwork: Bool) {
+        guard !trackID.isEmpty else { return }
+        lastMediaRemoteTrackID = trackID
+        lastMediaRemoteTrackAt = Date()
+        lastMediaRemoteHadArtwork = hasArtwork
+    }
+
+    private func shouldPreferRecentMediaRemote(overMusicTrackID musicTrackID: String) -> Bool {
+        guard lastMediaRemoteHadArtwork,
+              let lastMediaRemoteTrackID,
+              !lastMediaRemoteTrackID.isEmpty,
+              !musicTrackID.isEmpty,
+              lastMediaRemoteTrackID != musicTrackID,
+              let lastMediaRemoteTrackAt,
+              Date().timeIntervalSince(lastMediaRemoteTrackAt) < 3.0,
+              playbackState.hasTrack else {
             return false
         }
 
@@ -624,11 +716,16 @@ final class SampleRateModel: ObservableObject {
         return true
     }
 
-    private func updateArtwork(_ data: Data?) {
+    private func updateArtwork(_ data: Data?, artworkURL: URL? = nil) {
         let trackChanged = artworkTrackTitle != currentTrackTitle
 
         if let data {
             applyArtworkData(data, trackTitle: currentTrackTitle)
+            return
+        }
+
+        if let artworkURL {
+            scheduleArtworkDownload(artworkURL, title: currentTrackTitle)
             return
         }
 
@@ -640,9 +737,37 @@ final class SampleRateModel: ObservableObject {
     private func resetArtworkForTrack(_ title: String) {
         artworkTrackTitle = title
         lastArtworkData = nil
+        lastArtworkURL = nil
         if title == "Not playing" || title == "Unavailable" {
             artwork = nil
         }
+    }
+
+    private func scheduleArtworkDownload(_ url: URL, title: String) {
+        guard url != lastArtworkURL || artworkTrackTitle != title || artwork == nil else {
+            return
+        }
+
+        artworkFetchGeneration += 1
+        let generation = artworkFetchGeneration
+        artworkTrackTitle = title
+        lastArtworkURL = url
+
+        artworkDownloadSession.dataTask(with: url) { [weak self] data, _, _ in
+            guard let self,
+                  let data,
+                  !data.isEmpty else {
+                return
+            }
+
+            DispatchQueue.main.async {
+                guard self.artworkFetchGeneration == generation,
+                      self.currentTrackTitle == title else {
+                    return
+                }
+                self.applyArtworkData(data, trackTitle: title)
+            }
+        }.resume()
     }
 
     private func scheduleMusicArtworkFetch(for title: String, attempt: Int = 0) {
@@ -993,7 +1118,7 @@ final class SampleRateModel: ObservableObject {
         }
 
         if isPlaying, autoSwitchEnabled, isSafeTrackBoundary(position) {
-            statusMessage = "Waiting for log sample rate"
+            statusMessage = playbackStatusWithoutLogRate()
         }
     }
 
